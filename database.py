@@ -1,10 +1,13 @@
 import sqlite3
 import datetime
+import psycopg2
 
 
 class Database:
     def __init__(self, db_file):
         self.connection = sqlite3.connect(db_file, check_same_thread=False)
+        """self.connection = psycopg2.connect(dbname='database', user='db_user',
+                                password='mypassword', host='localhost')"""
         self.cursor = self.connection.cursor()
         self.cursor.execute(
             """CREATE TABLE IF NOT EXISTS main(
@@ -73,7 +76,8 @@ class Database:
                 prefix_off TEXT,
                 message TEXT,
                 count INT,
-                is_active INT NOT NULL DEFAULT 0);
+                is_active INT NOT NULL DEFAULT 0,
+                message_id INT);
                 """
             )
             self.cursor.execute(f"insert into `groups` (`group_id`, `title`) values (?,?);", (id_group, title))
@@ -81,26 +85,27 @@ class Database:
 
     # антифлуд
 
-    def check_flood(self, chat_id, message, user_id):
+    def check_flood(self, chat_id, message, user_id, message_id):
         with self.connection:
-            mes, count, last_message = self.cursor.execute(f'select `message`, `count`, `last_message` from `{str(chat_id)}` where `user_id` = ?;', (user_id,)).fetchone()
+            mes, count, last_message, mes_id = self.cursor.execute(f'select `message`, `count`, `last_message`, `message_id` from `{str(chat_id)}` where `user_id` = ?;', (user_id,)).fetchone()
             limit = datetime.datetime.now().second - datetime.datetime.strptime(last_message, '%Y-%m-%d %H:%M:%S').second
             if count == 2:
                 self.cursor.execute(f'update `{str(chat_id)}` set `message` = ?, `count` = ? where user_id = ?;',
                                            (message, 0, user_id))
-                return True
+                return mes_id
             if mes:
                 if mes == message and limit < 2:
                     count += 1
+                    message_id = mes_id
                 else:
                     count = 0
-                self.cursor.execute(f'update `{str(chat_id)}` set `message` = ?, `count` = ? where user_id = ?;',
-                                           (message, count, user_id))
+                    message_id = message_id
+                self.cursor.execute(f'update `{str(chat_id)}` set `message` = ?, `count` = ?, `message_id` = ? where user_id = ?;',
+                                           (message, count, message_id, user_id))
                 return
             else:
-                self.cursor.execute(f'update `{str(chat_id)}` set `message` = ?, `count` = ? where user_id = ?;', (message, 0, user_id))
+                self.cursor.execute(f'update `{str(chat_id)}` set `message` = ?, `count` = ?, `message_id` = ? where user_id = ?;', (message, 0, message_id, user_id))
                 return
-
 
 
                 # Блок храненения
@@ -380,6 +385,3 @@ class Database:
     def select_all(self, chat_id):
         with self.connection:
             return self.cursor.execute(f'select `user_id`, `first_name` from `{chat_id}`').fetchall()
-
-    def __del__(self):
-        self.connection.close()

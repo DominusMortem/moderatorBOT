@@ -9,7 +9,6 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.dispatcher.filters.state import StatesGroup, State
 from aiogram.utils.exceptions import (MessageCantBeDeleted, MessageToDeleteNotFound)
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from aiogram.dispatcher import FSMContext
 
 import config
 from database import Database
