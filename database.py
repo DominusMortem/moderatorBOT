@@ -6,6 +6,8 @@ import psycopg2
 class Database:
     def __init__(self, db_file):
         self.connection = sqlite3.connect(db_file, check_same_thread=False)
+        """self.connection = psycopg2.connect(dbname='database', user='db_user',
+                                password='mypassword', host='localhost')"""
         self.cursor = self.connection.cursor()
         self.cursor.execute(
             """CREATE TABLE IF NOT EXISTS main(
@@ -383,6 +385,3 @@ class Database:
     def select_all(self, chat_id):
         with self.connection:
             return self.cursor.execute(f'select `user_id`, `first_name` from `{chat_id}`').fetchall()
-
-    def __del__(self):
-        self.connection.close()

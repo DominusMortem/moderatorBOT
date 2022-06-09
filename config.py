@@ -1,4 +1,4 @@
-TOKEN = '5473043715:AAGcxiELWrRa4M5wYFLRhW99dAyMknYFmfo'
-ADMIN_ID = 5320329886
+TOKEN = '5595512117:AAE8CVh94AyINIP__ydwJ_NK2y8_0pNxhz0'
+ADMIN_ID = 1614575865
 
 WORDS = ['секс', 'порно', 'хуй', 'хуйня', 'работа', 'деньги', 'блядь', 'блять']
