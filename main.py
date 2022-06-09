@@ -1224,7 +1224,7 @@ async def mess_handler(message: types.Message):
     is_owner = db.get_owner(from_id)
     is_admin = db.get_admin(chat_id, from_id)
     is_moder = db.get_moder(chat_id, from_id)
-    if db.check_flood(chat_id, text, from_id):
+    if db.check_flood(chat_id, text, from_id, message.message_id):
         if not any([is_owner, is_admin, is_moder]) or config.ADMIN_ID != from_id:
             await add_mute(chat_id, message.from_user.first_name, from_id, '30m', 'Флуд')
     db.add_time_message(chat_id, from_id)
