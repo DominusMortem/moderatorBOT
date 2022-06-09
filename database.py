@@ -70,13 +70,40 @@ class Database:
                 count_message INT NOT NULL DEFAULT 0,
                 exp TEXT NOT NULL DEFAULT `0/300`,
                 first_name TEXT,
-                prefix_off TEXT);
+                prefix_off TEXT,
+                message TEXT,
+                count INT,
+                is_active INT NOT NULL DEFAULT 0);
                 """
             )
             self.cursor.execute(f"insert into `groups` (`group_id`, `title`) values (?,?);", (id_group, title))
             self.connection.commit()
 
-    # Блок храненения
+    # антифлуд
+
+    def check_flood(self, chat_id, message, user_id):
+        with self.connection:
+            mes, count, last_message = self.cursor.execute(f'select `message`, `count`, `last_message` from `{str(chat_id)}` where `user_id` = ?;', (user_id,)).fetchone()
+            limit = datetime.datetime.now().second - datetime.datetime.strptime(last_message, '%Y-%m-%d %H:%M:%S').second
+            if count == 2:
+                self.cursor.execute(f'update `{str(chat_id)}` set `message` = ?, `count` = ? where user_id = ?;',
+                                           (message, 0, user_id))
+                return True
+            if mes:
+                if mes == message and limit < 2:
+                    count += 1
+                else:
+                    count = 0
+                self.cursor.execute(f'update `{str(chat_id)}` set `message` = ?, `count` = ? where user_id = ?;',
+                                           (message, count, user_id))
+                return
+            else:
+                self.cursor.execute(f'update `{str(chat_id)}` set `message` = ?, `count` = ? where user_id = ?;', (message, 0, user_id))
+                return
+
+
+
+                # Блок храненения
     def period_contain(self, chat_id=0, user_id=0, price=0, period=0, params=None):
         with self.connection:
             if params:
@@ -107,6 +134,22 @@ class Database:
                     self.cursor.execute(f'update `{str(chat_id)}` set `prefix_off` = ? where user_id = ?;',
                                         ('', user_id))
                     return True
+
+    def user_contain(self, user_id, from_id=0, chat_id=0, mention=0, read=0):
+        with self.connection:
+            if not read:
+                return self.cursor.execute(f'insert into `constants` (`user_id`, `from_id`, `chat_id`, `mention`) values (?,?,?,?);', (user_id, from_id, chat_id, mention))
+            else:
+                return self.cursor.execute(f'select `from_id`, `chat_id`, `mention` from `constants` where user_id = ?;', (user_id,)).fetchone()
+
+    def wedding_constaint(self, chat_id, person_first_name, person_id, person_two_first_name, person_two_id):
+        with self.connection:
+            return self.cursor.execute(f'insert into `constants` (`user_id`, `chat_id`, `person_first_name`, `person_id`, `person_two_first_name`, `person_two_id`) values (?,?,?,?,?,?);', (person_two_id, chat_id, person_first_name, person_id, person_two_first_name, person_two_id))
+
+    def get_wedding_const(self, user_id, chat_id):
+        with self.connection:
+            return self.cursor.execute('select `person_first_name`, `person_id`, `person_two_first_name`, `person_two_id` from `constants` where `user_id` = ? and `chat_id` = ?;', (user_id, chat_id)).fetchone()
+
 
     def create_setting(self):
         with self.connection:
@@ -230,9 +273,13 @@ class Database:
             user = self.cursor.execute(f"select `user_id` from `{str(chat_id)}` where `first_name` = ?;", (first_name,)).fetchone()
             return user
 
-    def add_user(self, chat_id, user_id, username, first_name):
+    def add_user(self, chat_id, user_id, username, first_name, is_active):
         with self.connection:
-            return self.cursor.execute(f"insert into `{str(chat_id)}` (`user_id`, `username`, `create_time`, `first_name`) values (?,?,?,?);", (user_id, username, datetime.date.today(), first_name ))
+            return self.cursor.execute(f"insert into `{str(chat_id)}` (`user_id`, `username`, `create_time`, `last_message`, `first_name`, `is_active`) values (?,?,?,?,?,?);", (user_id, username, datetime.date.today(), datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), first_name, is_active ))
+
+    def active(self, chat_id, user_id, active):
+        with self.connection:
+            return self.cursor.execute(f"update `{str(chat_id)}` set `is_active` = ? where user_id = ?;",(active, user_id))
 
     def add_time_message(self, chat_id, user_id):
         with self.connection:
@@ -260,7 +307,27 @@ class Database:
 
     def add_ban(self, chat_id, user_id, ban):
         with self.connection:
-            return self.cursor.execute(f"update `{str(chat_id)}` set `ban` = ?, `time_ban` = ? where `user_id` = ?;", (int(ban),  datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), user_id))
+            if ban:
+                return self.cursor.execute(f"update `{str(chat_id)}` set `ban` = ?, `time_ban` = ? where `user_id` = ?;", (int(ban),  datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), user_id))
+            else:
+                return self.cursor.execute(
+                    f"update `{str(chat_id)}` set `ban` = ? where `user_id` = ?;",
+                    (int(ban), user_id))
+
+    def unwarn(self, chat_id, user_id, warn):
+        with self.connection:
+            if not warn:
+                return self.cursor.execute(f"update `{str(chat_id)}` set `mute` = ? where `user_id` = ?;", (warn, user_id))
+            else:
+                mute = self.cursor.execute(f"select `mute` from `{str(chat_id)}` where `user_id` = ?;",
+                                           (user_id,)).fetchone()[0]
+                if mute > warn:
+                    mute -= warn
+                else:
+                    mute = 0
+                return self.cursor.execute(f"update `{str(chat_id)}` set `mute` = ? where `user_id` = ?;",
+                                           (mute, user_id))
+
 
     def update_user(self, chat_id, user_id, username, first_name):
         with self.connection:
