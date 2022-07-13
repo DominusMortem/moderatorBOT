@@ -21,18 +21,25 @@ class Database:
             user_id INT UNIQUE,
             desc TEXT);"""
         )
+
         self.cursor.execute(
             """CREATE TABLE IF NOT EXISTS groups(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             group_id TEXT UNIQUE,
-            title TEXT);"""
+            title TEXT,
+            silent_mode INT NOT NULL DEFAULT 0,
+            pair_game INT NOT NULL DEFAULT 0,
+            serial_killer INT NOT NULL DEFAULT 0,
+            time_serial TEXT NOT NULL DEFAULT 0);"""
         )
         self.cursor.execute(
             """CREATE TABLE IF NOT EXISTS setting(
             id INTEGER PRIMARY KEY,
             money_for_game INT NOT NULL DEFAULT 0,
             id_group_log TEXT UNIQUE,
-            exp_for_message INT NOT NULL DEFAULT 0);"""
+            exp_for_message INT NOT NULL DEFAULT 0,
+            gif INT NOT NULL DEFAULT 0,
+            pair_game INT NOT NULL DEFAULT 0);"""
         )
         self.cursor.execute("""CREATE TABLE IF NOT EXISTS constants(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,6 +54,22 @@ class Database:
             person_two_first_name TEXT,
             person_two_id INT
             );""")
+        self.cursor.execute("""CREATE TABLE IF NOT EXISTS rpcontext(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            com TEXT,
+            desc TEXT,
+            until_date TEXT NOT NULL DEFAULT 0,
+            prefix TEXT,
+            user_id INT);""")
+        self.cursor.execute("""CREATE TABLE IF NOT EXISTS VIP(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            until_date TEXT NOT NULL DEFAULT 0,
+            user_id INT);""")
+        self.cursor.execute("""CREATE TABLE IF NOT EXISTS killer(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INT,
+            first_name TEXT,
+            chat_id INT);""")
         self.connection.commit()
 
     def create_table(self, id_group, title):
@@ -77,11 +100,183 @@ class Database:
                 message TEXT,
                 count INT,
                 is_active INT NOT NULL DEFAULT 0,
-                message_id INT);
+                message_id INT,
+                reputation INT NOT NULL DEFAULT 0,
+                karma INT NOT NULL DEFAULT 0);
                 """
             )
             self.cursor.execute(f"insert into `groups` (`group_id`, `title`) values (?,?);", (id_group, title))
             self.connection.commit()
+
+# серийный убийца -----------------------------------
+
+    def get_serial(self, chat_id):
+        with self.connection:
+            return self.cursor.execute('select `serial_killer` from `groups` where `group_id` = ?;', (chat_id,)).fetchone()[0]
+
+    def add_serial(self, chat_id):
+        with self.connection:
+            dates = datetime.datetime.now() + datetime.timedelta(minutes=5)
+            return self.cursor.execute(f'update `groups` set `serial_killer` = ?, `time_serial` = ? where `group_id` = ?;',
+                                        (1, dates.strftime('%Y-%m-%d %H:%M:%S'), chat_id))
+
+    def add_victim(self, chat_id, user_id, first_name):
+        with self.connection:
+            if not bool(len(self.cursor.execute('select * from `killer` where `chat_id` = ? and `user_id` = ?;', (chat_id, user_id)).fetchall())):
+                return self.cursor.execute('insert into `killer` (`user_id`, `chat_id`, `first_name`) values (?,?,?);', (user_id, chat_id, first_name))
+
+    def del_victim(self, chat_id):
+        with self.connection:
+            return self.cursor.execute('delete from `killer` where `chat_id` = ?;', (chat_id,))
+
+    def get_victim(self, chat_id):
+        with self.connection:
+            return self.cursor.execute('select `user_id`, `first_name` from `killer` where `chat_id` = ?;', (chat_id,)).fetchall()
+
+    def stop_victim(self, chat_id):
+        with self.connection:
+            until = self.cursor.execute('select `time_serial` from `groups` where `group_id` = ?;', (chat_id,)).fetchone()
+            if until and until[0]:
+                if datetime.datetime.now() >= datetime.datetime.strptime(until[0], '%Y-%m-%d %H:%M:%S'):
+                    self.cursor.execute(f'update `groups` set `serial_killer` = ?, `time_serial` = ? where `group_id` = ?;',
+                                        (0, 0, chat_id))
+                    return True
+# -------------------------------------
+
+
+
+
+# карма -----------------------------------
+
+    def karma_add(self, chat_id, user_id, point):
+        with self.connection:
+            rep = self.cursor.execute(f"select `reputation` from `{str(chat_id)}` where `user_id` = ?;", (user_id, )).fetchone()[0]
+            rep += point
+            if rep >= 500:
+                rep = 500
+            if rep <= -500:
+                rep = -500
+            return self.cursor.execute(f"update `{str(chat_id)}` set `reputation` = ? where `user_id` = ?;", (rep, user_id))
+
+    def karma(self, chat_id, user_id):
+        with self.connection:
+            k = self.cursor.execute(f'select `karma` from `{str(chat_id)}` where `user_id` = ?;', (user_id,)).fetchone()[0]
+            k += 1
+            return self.cursor.execute(f'update `{str(chat_id)}` set `karma` = ? where `user_id` = ?;', (k, user_id))
+
+# -------------------------------------------
+    def get_all_id(self, chat_id):
+        with self.connection:
+            return self.cursor.execute(f'select `user_id` from `{str(chat_id)}`;').fetchall()
+
+    def pair_game(self, chat_id, mode):
+        with self.connection:
+            return self.cursor.execute(f"update `groups` set `pair_game` = ? where `group_id` = ?;", (mode, chat_id))
+
+    def get_pair_game(self, chat_id):
+        with self.connection:
+            return bool(self.cursor.execute(f"select `pair_game` from `groups` where `group_id` = ?;", (chat_id,)).fetchone()[0])
+
+    def get_silent_mode(self, chat_id):
+        with self.connection:
+            return bool(self.cursor.execute('select `silent_mode` from `groups` where `group_id` = ?;', (chat_id,)).fetchone()[0])
+
+    def set_silent_mode(self, chat_id, mode):
+        with self.connection:
+            return self.cursor.execute(f"update `groups` set `silent_mode` = ? where `group_id` = ?;", (mode, chat_id))
+
+    def create_vip(self, user_id, params=0):
+        with self.connection:
+            user = self.cursor.execute('select * from `VIP` where `user_id` = ?;', (user_id,)).fetchone()
+            if params == 1:
+                dates = datetime.datetime.now() + datetime.timedelta(days=30)
+                return self.cursor.execute('insert into `VIP` (`user_id`, `until_date`) values (?,?);', (user_id, dates.strftime('%Y-%m-%d %H:%M:%S')))
+            if user and user[0]:
+                return True
+            return False
+
+    def delete_vip(self, user_id):
+        with self.connection:
+            user = self.cursor.execute(f'select `until_date` from `VIP` where `user_id` = ?;',
+                                (user_id,)).fetchone()
+            if user and user[0]:
+                if datetime.datetime.now() >= datetime.datetime.strptime(
+                        self.cursor.execute(f'select `until_date` from `VIP` where user_id = ?;',
+                                            (user_id,)).fetchone()[0], '%Y-%m-%d %H:%M:%S'):
+                    self.cursor.execute(f'delete from `VIP` where `user_id` = ?;',
+                                        (user_id,))
+                    return True
+
+    def get_chat_title(self, chat_id):
+        with self.connection:
+            return self.cursor.execute('select `title` from `groups` where `group_id` = ?;', (chat_id,)).fetchone()[0]
+
+    def black_list(self, user_id):
+        with self.connection:
+            if not bool(len(self.cursor.execute('select * from `banned` where `user_id` = ?', (user_id,)).fetchall())):
+                return self.cursor.execute('insert into `banned` (`user_id`, `desc`) values (?,?);', (user_id, 'Добавлен в черный список'))
+
+    def create_rp(self, cont, desc, pref, user_id):
+        with self.connection:
+
+            dates = self.cursor.execute(f'select `until_date` from `VIP` where user_id = ?;', (user_id,)).fetchone()[0]
+            return self.cursor.execute('insert into `rpcontext` (`com`, `desc`, `prefix`, `until_date`, `user_id`) values (?,?,?,?,?);', (cont, desc, pref, dates, user_id))
+
+    def delete_rp(self, user_id):
+        with self.connection:
+            user = self.cursor.execute(f'select `until_date` from `rpcontext` where `user_id` = ?;',
+                                (user_id,)).fetchone()
+            if user and user[0]:
+                return self.cursor.execute(f'delete from `rpcontext` where user_id = ?;',
+                                    (user_id,))
+
+    def get_all_admin(self, chat_id):
+        with self.connection:
+            owners = self.owners()
+            admins = self.cursor.execute(f'select `first_name`, `user_id` from `{str(chat_id)}` where `is_admin` = ?;', (1,)).fetchall()
+            moders = self.cursor.execute(f'select `first_name`, `user_id` from `{str(chat_id)}` where `is_moder` = ?;', (1,)).fetchall()
+            return admins, moders, owners
+
+    def get_all_rp(self):
+        with self.connection:
+            return self.cursor.execute('select * from `rpcontext` where `user_id` = ?', (0,)).fetchall()
+
+    def get_rp(self, com):
+        with self.connection:
+            return self.cursor.execute('select `desc`, `prefix`, `user_id` from `rpcontext` where `com` = ?', (com, )).fetchone()
+
+    def rp_user(self, user_id):
+        with self.connection:
+            return self.cursor.execute('select `com`, `desc`, `id` from `rpcontext` where `user_id` = ?',
+                                       (user_id, )).fetchall()
+
+    def rp_delete(self, user_id, com):
+        with self.connection:
+            return self.cursor.execute('delete from `rpcontext` where `user_id` = ? and `com` = ?',
+                                       (user_id, com))
+
+    def rp_delete_by_id(self, rp_id):
+        with self.connection:
+            return self.cursor.execute('delete from `rpcontext` where `id` = ?', (int(rp_id), ))
+
+    def check_rp(self):
+        with self.connection:
+            return self.cursor.execute('select `com` from `rpcontext`').fetchall()
+
+    def info_chat(self, chat_id):
+        with self.connection:
+            return self.cursor.execute(f'select * from `{str(chat_id)}`').fetchall()
+
+    def refresh(self):
+        with self.connection:
+            weddings = self.cursor.execute('select `wedding`, `user_id` from `-1001781348153`').fetchall()
+            for wedding in weddings:
+                if wedding[0] != '0':
+                    wed = wedding[0].split('](')
+                    weds = f'<a href = "tg://user?id={wed[1][13:-1]}">{wed[0][1:]}</a>'
+                    print(weds)
+                    print(self.cursor.execute('update `-1001781348153` set `wedding` = ? where `user_id` = ?;', (weds, wedding[1])))
+
 
     # антифлуд
 
@@ -89,12 +284,12 @@ class Database:
         with self.connection:
             mes, count, last_message, mes_id = self.cursor.execute(f'select `message`, `count`, `last_message`, `message_id` from `{str(chat_id)}` where `user_id` = ?;', (user_id,)).fetchone()
             limit = datetime.datetime.now().second - datetime.datetime.strptime(last_message, '%Y-%m-%d %H:%M:%S').second
-            if count == 2:
+            if count == 3:
                 self.cursor.execute(f'update `{str(chat_id)}` set `message` = ?, `count` = ? where user_id = ?;',
                                            (message, 0, user_id))
                 return mes_id
             if mes:
-                if mes == message and limit < 2:
+                if mes == message and limit < 3:
                     count += 1
                     message_id = mes_id
                 else:
@@ -132,6 +327,11 @@ class Database:
             self.cursor.execute(f'update `{str(chat_id)}` set `prefix_off` = ? where `user_id` = ?;', (dates.strftime('%Y-%m-%d %H:%M:%S'), user_id))
             return dates.strftime('%Y-%m-%d %H:%M:%S')
 
+
+    def all_pref(self, chat_id):
+        with self.connection:
+            return self.cursor.execute(f'select `prefix_off`, `user_id` from `{str(chat_id)}`;').fetchall()
+
     def delete_prefix(self, chat_id, user_id):
         with self.connection:
             if self.cursor.execute(f'select `prefix_off` from `{str(chat_id)}` where user_id = ?;', (user_id,)).fetchone()[0]:
@@ -139,6 +339,16 @@ class Database:
                     self.cursor.execute(f'update `{str(chat_id)}` set `prefix_off` = ? where user_id = ?;',
                                         ('', user_id))
                     return True
+
+    def get_prefix(self, chat_id, user_id):
+        with self.connection:
+            if self.cursor.execute(f'select `prefix_off` from `{str(chat_id)}` where user_id = ?;', (user_id,)).fetchone()[0]:
+                self.cursor.execute(f'update `{str(chat_id)}` set `prefix_off` = ? where user_id = ?;',
+                                    ('', user_id))
+                return True
+            else:
+                return False
+
 
     def user_contain(self, user_id, from_id=0, chat_id=0, mention=0, read=0):
         with self.connection:
@@ -204,6 +414,14 @@ class Database:
     def get_group_message(self):
         with self.connection:
             return self.cursor.execute('select `id_group_log` from `setting` where id = ?;', (1,)).fetchone()
+
+    def set_gif(self, gif):
+        with self.connection:
+            return self.cursor.execute('update `setting` set `gif` = ? where id = ?;', (gif, 1))
+
+    def get_gif(self):
+        with self.connection:
+            return self.cursor.execute('select `gif` from `setting` where id = ?;', (1, )).fetchone()
 
 
     # Блок остальной
@@ -306,6 +524,16 @@ class Database:
                 (mute, datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), reason, user_id)
             )
 
+    def update_mute(self, chat_id, user_id):
+        with self.connection:
+            mute = self.mute(chat_id, user_id) - 1
+            if mute <= 0:
+                mute = 0
+            return self.connection.execute(
+                f"update `{str(chat_id)}` set `mute` = ? where `user_id` = ?;",
+                (mute, user_id)
+            )
+
     def get_ban(self, chat_id, user_id):
         with self.connection:
             return self.cursor.execute(f"select `ban` from `{str(chat_id)}` where `user_id` = ?;", (user_id, )).fetchone()[0]
@@ -313,7 +541,7 @@ class Database:
     def add_ban(self, chat_id, user_id, ban):
         with self.connection:
             if ban:
-                return self.cursor.execute(f"update `{str(chat_id)}` set `ban` = ?, `time_ban` = ? where `user_id` = ?;", (int(ban),  datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), user_id))
+                return self.cursor.execute(f"update `{str(chat_id)}` set `ban` = ?, `time_ban` = ?, `mute` = ? where `user_id` = ?;", (int(ban),  datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 0, user_id))
             else:
                 return self.cursor.execute(
                     f"update `{str(chat_id)}` set `ban` = ? where `user_id` = ?;",
@@ -347,13 +575,22 @@ class Database:
         with self.connection:
             return self.cursor.execute(f'select `first_name` from `{str(chat_id)}` where `user_id` = ?;',(user_id,)).fetchone()
 
-    def cash_db(self, chat_id, user_id):
+    def cash_db(self, user_id):
+        with self.connection:
+            groups = self.all_group()
+            cash = 0
+            for group in groups:
+                if self.user_exists(group[0], user_id):
+                    cash += self.cursor.execute(f'select `cash` from `{str(group[0])}` where `user_id` = ?;', (user_id,)).fetchone()[0]
+            return cash
+
+    def cash_one(self, chat_id, user_id):
         with self.connection:
             return self.cursor.execute(f'select `cash` from `{str(chat_id)}` where `user_id` = ?;', (user_id,)).fetchone()[0]
 
     def add_money(self, chat_id, user_id, cash):
         with self.connection:
-            cash_db = self.cash_db(chat_id, user_id)
+            cash_db = self.cash_one(chat_id, user_id)
             return self.cursor.execute(f'update `{str(chat_id)}` set `cash` = ? where `user_id` = ?;', (cash_db + cash, user_id))
 
     def exp(self, chat_id, user_id):
@@ -384,4 +621,4 @@ class Database:
 
     def select_all(self, chat_id):
         with self.connection:
-            return self.cursor.execute(f'select `user_id`, `first_name` from `{chat_id}`').fetchall()
+            return self.cursor.execute(f'select `user_id`, `first_name`, `is_active` from `{chat_id}`').fetchall()
