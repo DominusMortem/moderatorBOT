@@ -30,7 +30,9 @@ class Database:
             silent_mode INT NOT NULL DEFAULT 0,
             pair_game INT NOT NULL DEFAULT 0,
             serial_killer INT NOT NULL DEFAULT 0,
-            time_serial TEXT NOT NULL DEFAULT 0);"""
+            time_serial TEXT NOT NULL DEFAULT 0,
+            setka INT NOT NULL DEFAULT 0,
+            lottery INT NOT NULL DEFAULT 0);"""
         )
         self.cursor.execute(
             """CREATE TABLE IF NOT EXISTS setting(
@@ -70,6 +72,11 @@ class Database:
             user_id INT,
             first_name TEXT,
             chat_id INT);""")
+        self.cursor.execute("""CREATE TABLE IF NOT EXISTS lottery(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INT,
+                    first_name TEXT,
+                    chat_id INT);""")
         self.connection.commit()
 
     def create_table(self, id_group, title):
@@ -102,11 +109,22 @@ class Database:
                 is_active INT NOT NULL DEFAULT 0,
                 message_id INT,
                 reputation INT NOT NULL DEFAULT 0,
-                karma INT NOT NULL DEFAULT 0);
+                karma INT NOT NULL DEFAULT 0
+                items TEXT DEFAULT 0);
                 """
             )
             self.cursor.execute(f"insert into `groups` (`group_id`, `title`) values (?,?);", (id_group, title))
             self.connection.commit()
+
+
+
+    def items(self, chat_id, user_id):
+        with self.connection:
+            return self.cursor.execute(f'select `items` from `{str(chat_id)}` where `user_id` = ?', (user_id, )).fetchone()
+
+    def add_items(self, chat_id, user_id, items):
+        with self.connection:
+            return self.cursor.execute(f'update `{str(chat_id)}` set `items` = ? where `user_id` = ?', (items, user_id))
 
 # серийный убийца -----------------------------------
 
@@ -114,16 +132,34 @@ class Database:
         with self.connection:
             return self.cursor.execute('select `serial_killer` from `groups` where `group_id` = ?;', (chat_id,)).fetchone()[0]
 
-    def add_serial(self, chat_id):
+    def get_lottery(self, chat_id):
         with self.connection:
-            dates = datetime.datetime.now() + datetime.timedelta(minutes=5)
+            return self.cursor.execute('select `lottery` from `groups` where `group_id` = ?;', (chat_id,)).fetchone()[0]
+
+    def add_lottery(self, chat_id):
+        with self.connection:
+            return self.cursor.execute(f'update `groups` set `lottery` = ? where `group_id` = ?;',
+                                        (1, chat_id))
+
+    def add_serial(self, chat_id, t):
+        with self.connection:
+            dates = datetime.datetime.now() + datetime.timedelta(minutes=t)
             return self.cursor.execute(f'update `groups` set `serial_killer` = ?, `time_serial` = ? where `group_id` = ?;',
                                         (1, dates.strftime('%Y-%m-%d %H:%M:%S'), chat_id))
+
+    def get_time_serial(self, chat_id):
+        with self.connection:
+            return self.cursor.execute(f'select `time_serial` from `groups` where `group_id` = ?;', (chat_id,)).fetchone()[0]
 
     def add_victim(self, chat_id, user_id, first_name):
         with self.connection:
             if not bool(len(self.cursor.execute('select * from `killer` where `chat_id` = ? and `user_id` = ?;', (chat_id, user_id)).fetchall())):
                 return self.cursor.execute('insert into `killer` (`user_id`, `chat_id`, `first_name`) values (?,?,?);', (user_id, chat_id, first_name))
+
+    def add_user_lottery(self, chat_id, user_id, first_name):
+        with self.connection:
+            if not bool(len(self.cursor.execute('select * from `lottery` where `chat_id` = ? and `user_id` = ?;', (chat_id, user_id)).fetchall())):
+                return self.cursor.execute('insert into `lottery` (`user_id`, `chat_id`, `first_name`) values (?,?,?);', (user_id, chat_id, first_name))
 
     def del_victim(self, chat_id):
         with self.connection:
@@ -133,6 +169,10 @@ class Database:
         with self.connection:
             return self.cursor.execute('select `user_id`, `first_name` from `killer` where `chat_id` = ?;', (chat_id,)).fetchall()
 
+    def get_user_lottery(self, chat_id):
+        with self.connection:
+            return [user[0] for user in self.cursor.execute('select `user_id` from `lottery` where `chat_id` = ?;', (chat_id,)).fetchall()]
+
     def stop_victim(self, chat_id):
         with self.connection:
             until = self.cursor.execute('select `time_serial` from `groups` where `group_id` = ?;', (chat_id,)).fetchone()
@@ -141,9 +181,25 @@ class Database:
                     self.cursor.execute(f'update `groups` set `serial_killer` = ?, `time_serial` = ? where `group_id` = ?;',
                                         (0, 0, chat_id))
                     return True
+            users = self.cursor.execute('select * from `killer` where `chat_id` = ?;', (chat_id,)).fetchall()
+            if len(users) == 25:
+                return True
+            else:
+                return False
 # -------------------------------------
 
+    def check_setka(self, chat_id):
+        with self.connection:
+            group = self.cursor.execute('select `setka` from `groups` where `group_id` = ?;', (chat_id,)).fetchone()
+            if group:
+                return group[0]
+            else:
+                return
 
+    def setka(self, chat_id, param):
+        with self.connection:
+            return self.cursor.execute(f'update `groups` set `setka` = ? where `group_id` = ?;',
+                                        (param, chat_id))
 
 
 # карма -----------------------------------

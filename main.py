@@ -12,10 +12,8 @@ from aiogram import Bot, Dispatcher, executor, types
 import aiogram.utils.markdown as fmt
 from aiogram.utils import exceptions
 from aiogram.dispatcher.filters.state import StatesGroup, State
-from aiogram.utils.exceptions import (MessageCantBeDeleted, MessageToDeleteNotFound, RetryAfter)
+from aiogram.utils.exceptions import (MessageCantBeDeleted, MessageToDeleteNotFound, RetryAfter, MessageCantBeEdited)
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from telethon.tl.functions.channels import GetParticipantsRequest
-from telethon.tl.types import ChannelParticipantsSearch, ChannelParticipantCreator, ChannelParticipantAdmin
 
 import config
 from database import Database
@@ -125,6 +123,81 @@ TIMECHECK = {'м': 60,
              'ч': 3600}
 
 GROUP = {}
+box = ['🎸гитара',
+       '🎂торт',
+       '🔪нож',
+       '💰кот в мешке',
+       '🛳️Яхта',
+       '🛩️Самолет',
+       '🧳Чемодан',
+       '🔮Магический шар',
+       '🎳Набор для боулинга',
+       '🎃Тыква на Хеллуин',
+       '💴Пачка денег',
+       '🗿Статуя острова Пасхи',
+       '🧯Огнетушитель',
+       '💍Кольцо',
+       '🪒Бритва',
+       '🧹Метла',]
+
+@dp.message_handler(commands=['help'])
+async def help(message: types.Message):
+    from_id = message.from_user.id
+    chat_id = message.chat.id
+    is_owner = db.get_owner(from_id)
+    is_admin = db.get_admin(chat_id, from_id)
+    is_moder = db.get_moder(chat_id, from_id)
+    if not any([is_owner, is_admin, is_moder]) and config.ADMIN_ID != from_id:
+        text = ('Команды доступные пользователям.\n\n'
+                '<code>/info</code> - выводит информацию о пользователе.\n'
+                '<code>/rp</code> - список RP команд в чате. Команды вводятся в ответ на сообщение.\n'
+                '<code>/свадьба (никнейм)</code> - предложение свадьбы, можно использовать в ответ на сообщение.\n'
+                '<code>/развод (никнейм)</code> - развестись, можно использовать в ответ на сообщение.\n'
+                '<code>/браки</code> - список всех пар в чате.\n'
+                '<code>/карма</code> - проверить свою карму.\n'
+                '<code>/gift (сумма)</code> - пожертвовать сумму другому пользователю.\n'
+                '<code>/money</code> - проверить баланс.\n')
+    else:
+        text = (f'Помощь по командам доступным для администрации.\n'
+                f'Большинство команд можно использовать в ответ на сообщение пользователя.\n'
+                f'<code>/info (никнейм) </code> - выводит информацию о пользователе.\n\n'
+                f'<code>/карма (никнейм)</code> - проверить карму пользователя.\n'
+                f'<code>/ban (никнейм) (1/0)</code> - параметр 1 выдает бан пользователю, 0 - снимает.\n'
+                f'<code>/menu (никнейм) </code> - меню действий с пользователем.\n'
+                f'<code>/set_admin (никнейм) (1/0)</code> - параметр 1 выдает админа пользователю, 0 - снимает.\n'
+                f'<code>/set_moder (никнейм) (1/0)</code> - параметр 1 выдает модера пользователю, 0 - снимает.\n'
+                f'<code>/add_money (никнейм) (кол-во)</code> - добавляет установленное количество валюты.\n'
+                f'<code>/mute (никнейм) (время) (причина) </code> - дает мут пользователю на указаное кол-во времени\n'
+                f'<code>/unmute (никнейм)</code> - снимает мут\n'
+                f'<code>/talk (сообщение)</code> - написать от имени бота\n'
+                f'<code>/black (id)</code> - добавить в черный список сети\n'
+                f'<code>/white (id)</code> - удалить из черного списка сети\n'
+                f'<code>/выгрузить</code> - общая статистика по пользователям сети\n'
+                f'<code>/stats</code> - статистика в конкретной группе\n'
+                f'<code>/news</code> - обновления в боте.\n'
+                f'<code>/преф</code> - список пользователей с префиксами, учитывая администраторов.\n'
+                f'<code>/pair (on/off)</code> on - включение режима парных игр, off - для отключения.\n'
+                f'<code>/prefix (никнейм) (причина)</code> - удаление префикса по причине.\n'
+                f'<code>/admins</code> - список администрации.\n')
+    await bot.send_message(chat_id, text)
+    try:
+        await message.delete()
+    except (MessageToDeleteNotFound, MessageCantBeDeleted):
+        pass
+    return
+
+
+@dp.message_handler(commands=['bot'])
+async def bot_on(message: types.Message):
+    text = message.text.split()
+    if config.ADMIN_ID != message.from_user.id:
+        return
+    if text[1] == 'on':
+        db.setka(message.chat.id, 1)
+        await message.answer('Бот включен')
+    else:
+        db.setka(message.chat.id, 0)
+        await message.answer('Бот выключен')
 
 
 @dp.message_handler(commands='extermination')
@@ -157,7 +230,8 @@ async def exterm(callback_query: types.CallbackQuery):
         await callback_query.answer('Вы забанили всех в группе!!!', show_alert=True)
         await callback_query.message.delete()
 
-# @dp.message_handler(commands=['print'])
+
+@dp.message_handler(commands=['print'])
 async def prints(message: types.Message):
     await message.delete()
     all = await client.get_participants(message.chat.id, limit=5000)
@@ -182,33 +256,42 @@ async def prints(message: types.Message):
     await message.answer(f'Добавлено {count} пользователей\n Неактивных пользователей {desactive}')
 
 
+@dp.message_handler(commands=['check'])
+async def check(message: types.Message):
+    text = message.text.split()
+    if len(text) == 2:
+        user_id = text[1]
+        if db.user_exists(message.chat.id, user_id):
+            data = db.get_username(message.chat.id,user_id)
+            mes = (f'Информация о пользователе:\n'
+                   f'ID: {text[1]}\n'
+                   f'Name: {data[0]}')
+        else:
+            mes = f'Пользователя нет в базе.'
+        await message.answer(mes)
 
-
-@dp.message_handler(lambda message: message.chat.type in ['supergroup', 'group', 'channel'] and message.chat.id not in [-1001101450717, -1001630872849, -1001202181831, -1001629215553, -1001781348153, -1001600875052, -1001496141543, -1001601512040])
+@dp.message_handler(lambda message: message.chat.type in ['supergroup', 'group', 'channel'] and not db.check_setka(message.chat.id))
 async def t(message: types.Message):
-    '''msg = await bot.get_chat_member(message.chat.id, dict(await bot.get_me()).get('id'))
+    msg = await bot.get_chat_member(message.chat.id, dict(await bot.get_me()).get('id'))
     if msg.status == 'administrator':
         if dict(msg)['can_invite_users']:
             if dict(msg)['can_restrict_members']:
                 if dict(msg)['can_manage_chat']:
                     if dict(msg)['can_promote_members']:
-                        link = await bot.create_chat_invite_link(message.chat.id)
-                        msg = await bot.send_message(-1001101450717, link.invite_link)
-                        return'''
-    #await message.answer('Мне нужны все права администратора для работы!')
+                        return
+    await message.answer('Мне нужны все права администратора для работы!')
     return
 
 
 @dp.message_handler(commands=['выгрузить'])
 async def all_stats(message: types.Message):
-    group_list = ['-1001202181831', '-1001629215553', '-1001781348153']
     text = 'Статистика сети по пользователям:\n\n'
     count = 0
     count_act = 0
     for group in db.all_group():
-        if group[0] in group_list:
+        if db.check_setka(group[0]):
             users = db.select_all(group[0])
-            active = [user for user in users if user[2]== 1]
+            active = [user for user in users if user[2]==1]
             count += len(users)
             count_act += len(active)
             text += (f'{group[1]:}\n'
@@ -220,19 +303,32 @@ async def all_stats(message: types.Message):
     await message.answer(text)
 
 
-@dp.message_handler(commands=['доставка'])
-async def horror(message: types.Message):
+@dp.message_handler(commands=['розыгрыш'])
+async def lottery(message: types.Message):
     if message.chat.type == 'private':
+        await message.delete()
         return
     if db.get_silent_mode(message.chat.id):
         await message.delete()
         return
+    users = db.get_user_lottery(message.chat.id)
+    users.append(config.ADMIN_ID)
+    if message.from_user.id not in users:
+        await message.delete()
+        return
+    text = message.text.split()
+    if len(text) >= 2:
+        user_id, username, first_name = await ent(message)
+        db.add_user_lottery(message.chat.id, user_id, first_name)
+        await message.answer(fmt.text(fmt.hlink(*await mention_text(first_name, user_id)), ' добавлен распорядителем розыгрыша.'))
+        return
     try:
         if db.get_serial(message.chat.id):
-            await message.answer('Курьер в пути!')
+            await message.answer('Уже активировано!')
         else:
-            db.add_serial(message.chat.id)
-            await message.answer('На связи служба доставки сладостей🍩🍰\n Один клиент отказался от своего заказа и что бы не выбрасывать наш замечательный торт, мы доставим его случайному человеку! Ждите')
+            db.add_serial(message.chat.id, 10)
+            db.add_lottery(message.chat.id)
+            await message.answer('Начинается быстрый розыгрыш 𝐹𝑙𝑎𝑚𝑒 𝐶𝑜𝑖𝑛 💮. Скоро будет выбран победитель среди активных участников.')
     except Exception as e:
         logging.info(e)
     finally:
@@ -243,12 +339,56 @@ async def horror(message: types.Message):
         return
 
 
+@dp.message_handler(commands=['курьер'])
+async def cur(message: types.Message):
+    if message.chat.type == 'private':
+        return
+    if db.get_silent_mode(message.chat.id):
+        await message.delete()
+        return
+    text = message.text.split()
+    try:
+        if db.get_serial(message.chat.id):
+            time_serial = datetime.datetime.strptime(db.get_time_serial(message.chat.id), '%Y-%m-%d %H:%M:%S')
+            await message.answer(f'Курьер прибудет в {time_serial.strftime("%H:%M:%S")}')
+        else:
+            t = 5
+            if len(text) == 2 and text[1].isdigit():
+                t = int(text[1])
+            db.add_serial(message.chat.id, t)
+            await message.answer('Курьерская служба "Рандомные безделушки" начинает свою работу. Скоро курьер доставит посылку.')
+    except Exception as e:
+        logging.info(e)
+    finally:
+        try:
+            await message.delete()
+        except (MessageToDeleteNotFound, MessageCantBeDeleted):
+            pass
+        return
+
+
+@dp.message_handler(commands=['вещи'])
+async def items(message: types.Message):
+    await message.delete()
+    items = db.items(message.chat.id, message.from_user.id)[0]
+    mention = await mention_text(message.from_user.first_name, message.from_user.id)
+    if items == '0':
+        text = 'Курьер еще не приносил вам вещей!'
+    else:
+        text = fmt.text(fmt.hlink(*mention), ' - вот ваше имущество:\n')
+        items = [x.split(':') for x in [item for item in items.split(',')]]
+        items_to_dict = {x: int(y) for x, y in items}
+        for k, v in items_to_dict.items():
+            text += f'{k} - {v} шт.\n'
+    await message.answer(text)
+
+
 @dp.message_handler(commands=['link'])
 async def cmd_test(message: types.Message):
-    link = await bot.create_chat_invite_link(-1001202181831)
-    await message.answer(link.invite_link)
+
     link = await bot.create_chat_invite_link(-1001781348153)
     await message.answer(link.invite_link)
+
 
 short_commands = ['обнять', 'казнить', 'побить', 'любовь', 'недоверие', 'тусить', 'поцеловать', 'танец', 'ругать',
                   'цветы', 'сплетни', 'взятка', 'заказать']
@@ -270,8 +410,10 @@ async def news(message: types.Message):
     if message.chat.type == 'private':
         return
     await message.delete()
-    await message.answer('⚠Обновление бота на 06.07.22:\n'
-                         'На тестирование введена функция кармы, работает аналогично репутации. /карма показывает текущий уровень кармы.')
+    await message.answer('⚠Обновление бота на 13.07.22:\n'
+                         'Добавлена функция быстрых розыгрышей. По команде /лотерея, владелец может запустить розыгрыш.'
+                         'Для участия необходимо лишь быть активным в чате. Победители определяются по достижении'
+                         ' 25 участников или 10 минут. Побеждают 5 человек, награда 3 𝐹𝑙𝑎𝑚𝑒 𝐶𝑜𝑖𝑛 💮')
 
 
 @dp.message_handler(commands=['talk'])
@@ -292,6 +434,10 @@ async def black(message: types.Message):
     is_admin = db.get_admin(message.chat.id, message.from_user.id)
     is_moder = db.get_moder(message.chat.id, message.from_user.id)
     if not any([is_owner, is_admin, is_moder]) and config.ADMIN_ID != message.from_user.id:
+        await message.answer('Недостаточно прав')
+        return
+    if db.get_owner(text[1]):
+        await message.answer('Нельзя банить совладельцев!')
         return
     try:
         db.black_list(text[1])
@@ -450,7 +596,6 @@ async def ban_key(callback_query: types.CallbackQuery):
         if com == 'close':
             await callback_query.message.delete()
             return
-        print(to_user, callback_query.message.chat.id, mention, callback_query.from_user.id)
         await DICT_COMMANDS[com](to_user, callback_query.message.chat.id, mention, callback_query.from_user.id)
 
 
@@ -601,10 +746,14 @@ async def banned(user_id, chat_id, mention, user=0):
         for group in db.all_group():
             group_id = int(group[0])
             if db.user_exists(group_id, user_id):
-                print(user_id, group_id)
+                if any([db.get_owner(user_id), db.get_admin(group_id, user_id), db.get_moder(group_id, user_id)]):
+                    await bot.send_message(group_id, 'Нельзя забанить администраторов!')
+                    if db.get_banned(user_id):
+                        db.delete_banned(user_id)
+                    return
                 await bot.ban_chat_member(group_id, user_id)
                 await bot.send_message(group_id,
-                                       fmt.text('Пользователь ', fmt.hlink(*mention), ' забанен.\nПричина: Систематические нарушения правил.'))
+                                       fmt.text('Пользователь ', fmt.hlink(*mention), ' забанен.\nПричина: Пользователь с черном списке сети.'))
     except Exception as e:
         print(e)
 
@@ -636,8 +785,8 @@ async def pref(message: types.Message):
     await message.answer(f'Количество пользователей с префиксом: {len(msg)}\n Максимальное количество - 50')
     text = ''
     for user in msg:
-        # mention = await mention_text(user.user.first_name, user.user.id)
-        text += fmt.text(user.user.first_name, ' - ', user.custom_title, '\n') # fmt.hlink(*mention)
+        mention = await mention_text(user.user.first_name, user.user.id)
+        text += fmt.text(fmt.hlink(*mention), ' - ', user.custom_title, '\n')
     msg = await message.answer(text)
     asyncio.create_task(delete_message(msg, 5))
     try:
@@ -654,15 +803,14 @@ async def command(message: types.Message):
     if db.get_silent_mode(message.chat.id):
         await message.delete()
         return
+    if not message.reply_to_message:
+        return
     mention = await mention_text(message.from_user.first_name, message.from_user.id)
     if db.delete_vip(message.from_user.id):
         db.delete_rp(message.from_user.id)
         await message.answer(fmt.text(fmt.hlink(*mention), 'Время действия VIP истек!'))
-    if not message.reply_to_message:
-        await message.reply('Эта команда должна быть ответом на сообщение!')
-        return
-    person_one = await mention_text_2(message.from_user.first_name, message.from_user.id)
-    person_two = await mention_text_2(message.reply_to_message.from_user.first_name,
+    person_one = await mention_text(message.from_user.first_name, message.from_user.id)
+    person_two = await mention_text(message.reply_to_message.from_user.first_name,
                                       message.reply_to_message.from_user.id)
     desc, pref, user_id = db.get_rp(message.text.lower())
     if user_id == 0 or user_id == message.from_user.id:
@@ -670,7 +818,7 @@ async def command(message: types.Message):
             pref = f'{pref}| '
         else:
             pref = ''
-        await message.answer(f'{pref}{person_one} {desc} {person_two}')
+        await message.answer(f'{pref}{fmt.hlink(*person_one)} {desc} {fmt.hlink(*person_two)}')
     else:
         await message.delete()
 
@@ -727,6 +875,17 @@ async def pair_game(message: types.Message):
         text = 'Режим парных игр отключен. Автонаказание за лив включено. Приятной игры.'
     msg = await message.answer(text)
     asyncio.create_task(delete_message(msg, 10))
+    await info_message(
+        'парные игры',
+        message.chat.title,
+        message.chat.id,
+        message.from_user.first_name,
+        message.from_user.id,
+        message.from_user.first_name,
+        message.from_user.id,
+        message.from_user.username,
+        message.from_user.username
+    )
     try:
         await message.delete()
     except (MessageToDeleteNotFound, MessageCantBeDeleted):
@@ -823,9 +982,9 @@ async def info_message(
         f'#{command}\n\n'
         f'Группа: {chat_title}\n'
         f'[#chat{str(chat_id)[1:]}]\n'
-        f'Инициатор: {first_name} [{username or "Не задано"}]\n'
+        f'Инициатор: {fmt.quote_html(first_name)} [{username or "Не задано"}]\n'
         f'[#user{user_id}]\n'
-        f'Пользователь: {to_first_name} [{to_username or "Не задано"}]\n'
+        f'Пользователь: {fmt.quote_html(to_first_name)} [{to_username or "Не задано"}]\n'
         f'[#user{to_user_id}]\n'
         f'Время: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
     group_id = db.get_group_message()
@@ -996,7 +1155,6 @@ async def wedding(message: types.Message):
     person_one_not_wending = db.get_wedding(message.chat.id, message.from_user.id)[0]
     person_two_not_wending = db.get_wedding(message.chat.id, user_id)[0]
     if person_one_not_wending == '0' and person_two_not_wending == '0':
-        print(mention, mention_one)
         msg = await message.answer(f'💗{mention}, минуту внимания!\n'
                                    f'{mention_one} сделал(а) вам предложение руки и сердца.🥰',
                                    reply_markup=keyboard)
@@ -1096,7 +1254,13 @@ async def carma(message: types.Message):
     if db.get_silent_mode(message.chat.id):
         await message.delete()
         return
-    data = db.show_info(message.chat.id, message.from_user.id)
+    if message.reply_to_message:
+        user_id = message.reply_to_message.from_user.id
+        first_name = message.reply_to_message.from_user.first_name
+    else:
+        user_id = message.from_user.id
+        first_name = message.from_user.first_name
+    data = db.show_info(message.chat.id, user_id)
     rank = ''
     for k, v in range_tab.items():
         if data[25] in v:
@@ -1116,7 +1280,7 @@ async def carma(message: types.Message):
         karma_title = karma_title[2]
     else:
         karma_title = karma_title[0]
-    mention = await mention_text(message.from_user.first_name, message.from_user.id)
+    mention = await mention_text(first_name, user_id)
     text = fmt.text(fmt.hlink(*mention),
             f'\n✨|Ваша карма: {rank} ({data[25]})\n',
             f'🏅|Очки кармы: {data[26]}\n',
@@ -1137,9 +1301,12 @@ async def add_karma(message: types.Message):
         return
     if message.reply_to_message:
         user_id = message.reply_to_message.from_user.id
+        if user_id == message.from_user.id:
+            await message.delete()
+            await message.answer('Изменять карму самому себе нельзя!')
+            return
         first_name = message.reply_to_message.from_user.first_name
         username = message.reply_to_message.from_user.username
-
         if message.text == '+':
             db.karma_add(message.chat.id, user_id, 1)
         else:
@@ -1172,13 +1339,13 @@ async def info(message: types.Message):
                 return
             user_id, first_name, username = await ent(message)
             data = db.show_info(message.chat.id, user_id)
-            mention = await mention_text_2(first_name, user_id)
+            mention = await mention_text(first_name, user_id)
             if not db.user_exists(message.chat.id, user_id):
                 db.add_user(message.chat.id, user_id, username, first_name,
                             1)
         else:
             data = db.show_info(message.chat.id, message.from_user.id)
-            mention = await mention_text_2(message.from_user.first_name, message.from_user.id)
+            mention = await mention_text(message.from_user.first_name, message.from_user.id)
             user_id = message.from_user.id
             username = message.from_user.id
             first_name = message.from_user.first_name
@@ -1194,8 +1361,8 @@ async def info(message: types.Message):
             if data[25] in v:
                 rank = k
         text = (f'🔤|Никнейм: @{data[2] or "Не задано"}\n'
-                f'👤|Профиль: {mention}\n'
-                f'🔢|Id: {user_id}\n\n'
+                f'👤|Профиль: {fmt.hlink(*mention)}\n'
+                f'🔢|Id: <code>{user_id}</code>\n\n'
                 f'🕛|Дата первого входа: {data[3]}\n'
                 f'💠|Ранг: {data[16]}\n'
                 f'↕️|Карма: {rank} ({data[25]})\n'
@@ -1233,6 +1400,13 @@ async def info(message: types.Message):
 async def admins(message: types.Message):
     if message.chat.type == 'private':
         return
+    from_id = message.from_user.id
+    chat_id = message.chat.id
+    is_owner = db.get_owner(from_id)
+    is_admin = db.get_admin(chat_id, from_id)
+    is_moder = db.get_moder(chat_id, from_id)
+    if not any([is_owner, is_admin, is_moder]) and config.ADMIN_ID != from_id:
+        return
     admins, moders, owners = db.get_all_admin(message.chat.id)
     text = fmt.text(fmt.hlink(*await mention_text('Владелец', config.ADMIN_ID)), '\n')
     for owner_id in owners:
@@ -1268,6 +1442,8 @@ async def admins(message: types.Message):
 
 @dp.message_handler(content_types=['new_chat_members'])  # Вошел
 async def user_joined(message: types.Message):
+    if not db.check_setka(message.chat.id):
+        return
     if message.new_chat_members[0].id == dict(await bot.get_me()).get('id'):
         db.create_table(message.chat.id, message.chat.title)
         db.add_user(message.chat.id, message.from_user.id, message.from_user.username, message.from_user.first_name, 1)
@@ -1326,6 +1502,8 @@ async def user_joined(message: types.Message):
 
 @dp.message_handler(content_types=["left_chat_member"])  # Вышел
 async def on_user_exit(message: types.Message):
+    if not db.check_setka(message.chat.id):
+        return
     db.active(message.chat.id, message.left_chat_member.id, 0)
     await info_message(
         'Вышел из чата',
@@ -1645,7 +1823,10 @@ async def add_money(message: types.Message):
         if abs(int(text[-1])) > 1000000000:
             await message.answer(f'Число за пределами разумного!')
             return
-        db.add_money(message.chat.id, user_id, int(text[-1]))
+        chat_id = message.chat.id
+        if chat_id in [-1001496141543, -1001101450717]:
+            chat_id = -1001781348153
+        db.add_money(chat_id, user_id, int(text[-1]))
         mention = await mention_text_2(first_name, user_id)
         if int(text[-1]) > 0:
             await message.answer(
@@ -1922,7 +2103,7 @@ async def mute(message: types.Message):
         is_owner = db.get_owner(from_id)
         is_admin = db.get_admin(chat_id, from_id)
         is_moder = db.get_moder(chat_id, from_id)
-        if not any([is_owner, is_admin, is_moder]) and config.ADMIN_ID != from_id:
+        if not any([is_owner, is_admin, is_moder]) and config.ADMIN_ID != from_id and from_id != 2146850501:
             return
         text = message.text.split()
         if message.reply_to_message:
@@ -1962,10 +2143,14 @@ async def mute(message: types.Message):
                                            until_date=int(time.time()) + mute_sec * TIMECHECK.get(end, 1))
             mute_db = db.mute(message.chat.id, user_id) + 1
             db.add_mute(message.chat.id, user_id, mute_db, ' '.join(text[index:]))
+            if mute_db >= 20:
+                await bot.send_message(
+                    chat_id,
+                    f'{mention} у вас очень много нарушений.\nСкоро бот выдаст автоматический бан.\nРекомендуется купить разварн в магазине!')
             if mute_db >= 25:
                 db.add_ban(message.chat.id, user_id, 1)
                 await bot.ban_chat_member(message.chat.id, user_id)
-                await message.answer(f'Пользователь {mention} забанен.\nПричина: Систематические нарушения правил.')
+                await message.answer(f'Пользователь {mention} забанен.\nПричина: Количество нарушений превысило лимит.')
             else:
                 await message.answer(
                     f'Пользователь {mention} получил мут на {mute_sec} {ending}.\nПричина: {" ".join(text[index + 1:])}\nНарушений: {mute_db}')
@@ -1983,34 +2168,6 @@ async def mute(message: types.Message):
     except TypeError as e:
         await message.answer(f'Ой, ошибка: {e.args}')
         await bot.send_message(db.get_group_message()[0], f'{message}')
-    try:
-        await message.delete()
-    except (MessageToDeleteNotFound, MessageCantBeDeleted):
-        pass
-    return
-
-
-@dp.message_handler(commands=['help'])
-async def help(message: types.Message):
-    from_id = message.from_user.id
-    chat_id = message.chat.id
-    is_owner = db.get_owner(from_id)
-    is_admin = db.get_admin(chat_id, from_id)
-    is_moder = db.get_moder(chat_id, from_id)
-    if not any([is_owner, is_admin, is_moder]) and config.ADMIN_ID != from_id and from_id != 2146850501:
-        return
-    text = (f'Помощь по командам доступным для администрации.\n\n'
-            f'<code>/info (никнейм) </code> - Выводит информацию о пользователе.\n\n'
-            f'<code>/ban (никнейм) (1/0)</code> - параметр 1 выдает бан пользователю, 0 - снимает.\n\n'
-            f'<code>/menu (никнейм) </code> - меню действий с пользователем.\n\n'
-            f'<code>/set_admin (никнейм) (1/0)</code> - параметр 1 выдает админа пользователю, 0 - снимает.\n\n'
-            f'<code>/set_moder (никнейм) (1/0)</code> - параметр 1 выдает модера пользователю, 0 - снимает.\n\n'
-            f'<code>/tagall текст (1/0)</code> - тегает пользователей с заданным текстом, в настоящщий момент не советую пока пользоваться.\n\n'
-            f'<code>/add_money (никнейм) (кол-во)</code> - добавляет установленное количество валюты.\n\n'
-            f'<code>/mute (никнейм) (время) (причина) </code> - дает мут пользователю на указаное кол-во времени\n\n'
-            f'<code>/unmute (никнейм)</code> - снимает мут\n'
-            f'<code>/talk (сообщение)</code> - написать от имени бота')
-    await bot.send_message(chat_id, text)
     try:
         await message.delete()
     except (MessageToDeleteNotFound, MessageCantBeDeleted):
@@ -2093,11 +2250,14 @@ async def add_mute(chat_id, first_name, user_id, times, reason):
     mute_db = db.mute(chat_id, user_id) + 1
     db.add_mute(chat_id, user_id, mute_db, f'{times} {reason}')
     mention = await mention_text_2(first_name, user_id)
+    if mute_db >= 20:
+        await bot.send_message(
+            chat_id, f'{mention} у вас очень много нарушений.\nСкоро бот выдаст автоматический бан.\nРекомендуется купить разварн в магазине!')
     if mute_db >= 25:
         db.add_ban(chat_id, user_id, 1)
         await bot.ban_chat_member(chat_id, user_id)
         await bot.send_message(
-        chat_id, f'Пользователь {mention} забанен.\nПричина: Систематические нарушения правил.')
+        chat_id, f'Пользователь {mention} забанен.\nПричина: Количество нарушений превысило лимит.')
     await bot.send_message(
         chat_id,
         f'Пользователь {mention} получил мут на {times[:-1]} {time_check(times[-1], int(times[:-1]))}.\nПричина: {reason}\nНарушений: {mute_db}'
@@ -2166,7 +2326,16 @@ async def rp_commands(message: types.Message):
         keyboard = types.InlineKeyboardMarkup()
         keyboard.add(types.InlineKeyboardButton('Сохранить', callback_data='rp_ok'))
         keyboard.add(types.InlineKeyboardButton('Изменить', callback_data=f'rp_cancel_{command}'))
-        await bot.edit_message_text(f'Ваша команда выглядит так:\n {smile}|@yourname {desc} @someuser', message.from_user.id, message.message_id - 1, reply_markup=keyboard)
+        try:
+            await bot.edit_message_text(f'Ваша команда выглядит так:\n {smile}|@yourname {desc} @someuser', message.from_user.id, message.message_id - 1, reply_markup=keyboard)
+        except MessageCantBeEdited:
+            keyboard = types.InlineKeyboardMarkup()
+            keyboard.add(types.InlineKeyboardButton('Пример в чате', callback_data='rp_show'))
+            await message.delete()
+            await message.answer('Для создание своей команды в чате пришлите сообщение в формате:\n'
+                                                'смайл|команда|действие. Например 🤗|обнять|обнял.\n',
+                                                reply_markup=keyboard)
+
         #await message.answer(f'Создана новая команда {command}\n /start что бы вернутся', reply_markup=types.ReplyKeyboardRemove())
 
 
@@ -2264,7 +2433,6 @@ async def prefix_buy(callback_query: types.CallbackQuery):
 async def unban_cash(callback_query: types.CallbackQuery):
     chat_id = callback_query.data[1:]
     try:
-        print(callback_query.data[1:], callback_query.from_user.id)
         if db.cash_db(callback_query.from_user.id) >= 200:
             await buy(callback_query.from_user.id, 200)
             db.add_ban(chat_id, callback_query.from_user.id, 0)
@@ -2486,14 +2654,12 @@ async def prefix(message: types.Message):
         if not db.user_exists(message.chat.id, user_id):
             db.add_user(message.chat.id, user_id, username, first_name,
                         1)
-        flag = db.get_prefix(chat_id, user_id)
         mention = await mention_text_2(first_name, user_id)
-        if flag:
-            await bot.promote_chat_member(
-                chat_id,
-                user_id
-            )
-            await message.answer(f'{mention}, Вам удален префикс!.\nПричина: {text[-1]}.')
+        await bot.promote_chat_member(
+            chat_id,
+            user_id
+        )
+        await message.answer(f'{mention}, Вам удален префикс!.\nПричина: {text[-1]}.')
         await info_message(
             'delete prefix',
             message.chat.title,
@@ -2548,10 +2714,44 @@ async def mess_handler(message: types.Message):
     if db.get_serial(message.chat.id):
         db.add_victim(message.chat.id, message.from_user.id, message.from_user.first_name)
         if db.stop_victim(message.chat.id):
-            user = random.choice(db.get_victim(message.chat.id))
+            users = db.get_victim(message.chat.id)
             db.del_victim(message.chat.id)
-            mention = await mention_text(user[1], user[0])
-            await message.answer(fmt.text(f'Курьер доставил шикарный торт🎂 ', fmt.hlink(*mention), '! Приятного аппетита!'))
+            if db.get_lottery(message.chat.id):
+                text = 'Участники:\n'
+                c = 1
+                for user in users:
+                    mention = await mention_text(user[1], user[0])
+                    text += fmt.text(c, ') ', fmt.hlink(*mention), '\n')
+                    c += 1
+                await message.answer(text)
+                await message.answer('Выбираем победителей!')
+                await asyncio.sleep(10)
+                x = 0
+                if len(users) >= 5:
+                    x = 5
+                else:
+                    x = len(users)
+                users = random.choices(users, k=x)
+                text = 'Поздравляем победителей:\n'
+                for user in users:
+                    db.add_money(message.chat.id, user[0], 3)
+                    mention = await mention_text(user[1], user[0])
+                    text += fmt.text(fmt.hlink(*mention), ' - 3 𝐹𝑙𝑎𝑚𝑒 𝐶𝑜𝑖𝑛 💮\n')
+            else:
+                user = random.choice(users)
+                mention = await mention_text(user[1], user[0])
+                item = random.choice(box)
+                text = fmt.text(fmt.hlink(*mention), f'к вам прибыл курьер и доставил вам посылку. Никто не знает что внутри.\nВы аккуратно вскрываете ее и вам достается - {item}\n')
+                items = db.items(message.chat.id, user[0])[0]
+                if items == '0':
+                    items = f'{item}:1'
+                else:
+                    items = [x.split(':') for x in [item for item in items.split(',')]]
+                    items_to_dict = {x: int(y) for x, y in items}
+                    items_to_dict[item] = int(items_to_dict.get(item, 0)) + 1
+                    items = ','.join([f'{k}:{v}' for k, v in items_to_dict.items()])
+                db.add_items(message.chat.id, user[0], items)
+            await message.answer(text)
     for word in config.WORDS:
         if word in text.lower():
             try:
@@ -2723,6 +2923,20 @@ async def bot_bad_request(update: types.Update, exception: exceptions.BadRequest
 
 @dp.errors_handler(exception=TypeError)
 async def bot_type_error(update: types.Update, exception: TypeError):
+    text = fmt.text('Группа: ',
+                    update.message.chat.title,
+                    ' - инициатор: ',
+                    fmt.hlink(*await mention_text(update.message.from_user.first_name, update.message.from_user.id)),
+                    ' -  текст сообщения: ',
+                    update.message.text,
+                    ' - Ошибка: ',
+                    exception,
+                    update)
+    await bot.send_message(db.get_group_message()[0], text, parse_mode=None)
+
+
+@dp.errors_handler(exception=ValueError)
+async def bot_value_error(update: types.Update, exception: ValueError):
     text = fmt.text('Группа: ',
                     update.message.chat.title,
                     ' - инициатор: ',
