@@ -109,12 +109,82 @@ class Database:
                 is_active INT NOT NULL DEFAULT 0,
                 message_id INT,
                 reputation INT NOT NULL DEFAULT 0,
-                karma INT NOT NULL DEFAULT 0
+                karma INT NOT NULL DEFAULT 0,
                 items TEXT DEFAULT 0);
                 """
             )
             self.cursor.execute(f"insert into `groups` (`group_id`, `title`) values (?,?);", (id_group, title))
             self.connection.commit()
+
+
+    def create_tables(self):
+        with self.connection:
+            self.cursor.execute(
+                f"""CREATE TABLE IF NOT EXISTS flame_net(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INT,
+                chat_id INT,
+                username TEXT,
+                create_time TEXT,
+                first_message TEXT,
+                last_message TEXT,
+                wedding TEXT NOT NULL DEFAULT `0`,
+                wedding_time TEXT,
+                ban INT NOT NULL DEFAULT 0,
+                time_ban TEXT,
+                time_mute TEXT,
+                mute INT NOT NULL DEFAULT 0,
+                mute_reason TEXT,
+                is_admin INT NOT NULL DEFAULT 0,
+                cash INT NOT NULL DEFAULT 0,
+                is_moder INT NOT NULL DEFAULT 0,
+                role TEXT NOT NULL DEFAULT `Новичок`,
+                count_message INT NOT NULL DEFAULT 0,
+                exp TEXT NOT NULL DEFAULT `0/300`,
+                first_name TEXT,
+                prefix_off TEXT,
+                message TEXT,
+                count INT,
+                is_active INT NOT NULL DEFAULT 0,
+                message_id INT,
+                reputation INT NOT NULL DEFAULT 0,
+                karma INT NOT NULL DEFAULT 0,
+                items TEXT DEFAULT 0);
+                """
+            )
+            self.connection.commit()
+            for group in self.all_group():
+                for user in self.info_chat(group[0]):
+                    self.cursor.execute('''insert into `flame_net` (`user_id`,
+                                                                    `chat_id`,
+                                                                    `username`,
+                                                                    `create_time`,
+                                                                    `first_message`,
+                                                                    `last_message`,
+                                                                    `wedding`,
+                                                                    `wedding_time`,
+                                                                    `ban`,
+                                                                    `time_ban`,
+                                                                    `time_mute`,
+                                                                    `mute`,
+                                                                    `mute_reason`,
+                                                                    `is_admin`,
+                                                                    `cash`,
+                                                                    `is_moder`,
+                                                                    `role`,
+                                                                    `count_message`,
+                                                                    `exp`,
+                                                                    `first_name`,
+                                                                    `prefix_off`,
+                                                                    `message`,
+                                                                    `count`,
+                                                                    `is_active`,
+                                                                    `message_id`,
+                                                                    `reputation`,
+                                                                    `karma`,
+                                                                    `items`) 
+                                                                    values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);''',
+                                        (user[1], group[0], *user[2:]))
 
 
 
@@ -178,11 +248,14 @@ class Database:
             until = self.cursor.execute('select `time_serial` from `groups` where `group_id` = ?;', (chat_id,)).fetchone()
             if until and until[0]:
                 if datetime.datetime.now() >= datetime.datetime.strptime(until[0], '%Y-%m-%d %H:%M:%S'):
-                    self.cursor.execute(f'update `groups` set `serial_killer` = ?, `time_serial` = ? where `group_id` = ?;',
-                                        (0, 0, chat_id))
+                    self.cursor.execute(f'update `groups` set `serial_killer` = ?, `time_serial` = ?, `lottery` = ? where `group_id` = ?;',
+                                        (0, 0, 0, chat_id))
                     return True
             users = self.cursor.execute('select * from `killer` where `chat_id` = ?;', (chat_id,)).fetchall()
             if len(users) == 25:
+                self.cursor.execute(
+                    f'update `groups` set `serial_killer` = ?, `time_serial` = ?, `lottery` = ? where `group_id` = ?;',
+                    (0, 0, 0, chat_id))
                 return True
             else:
                 return False
@@ -677,4 +750,4 @@ class Database:
 
     def select_all(self, chat_id):
         with self.connection:
-            return self.cursor.execute(f'select `user_id`, `first_name`, `is_active` from `{chat_id}`').fetchall()
+            return self.cursor.execute(f'select `user_id`, `first_name` from `{chat_id}` where `is_active` = ?', (1, )).fetchall()
