@@ -3,7 +3,7 @@ import datetime
 from sqlalchemy.sql import exists
 from sqlalchemy import func
 
-from query import session, FlameNet, Main, Groups, Lottery, Banned, RPContext, VIP, Setting, Killer
+from query import session, FlameNet, Main, Groups, Lottery, Banned, RPContext, VIP, Setting, Killer, Constants
 
 
 def time_check(end, time):
@@ -40,6 +40,15 @@ def user_exists(chat_id, user_id):
     return session.query(exists().where(FlameNet.chat_id == chat_id, FlameNet.user_id == user_id)).scalar()
 
 
+def get_user_by_username(chat_id, username):
+    return session.query(FlameNet).filter(FlameNet.chat_id == chat_id, FlameNet.username == username).one_or_none()
+
+
+def user_lottery(chat_id, user_id):
+    """Проверка что пользователь учавствует в лотерее"""
+    return session.query(exists().where(Killer.chat_id == chat_id, Killer.user_id == user_id)).scalar()
+
+
 def salent(chat_id):
     """Проверка тихого режима"""
     return session.query(exists().where(Groups.group_id == chat_id, Groups.silent_mode == 1)).scalar()
@@ -58,6 +67,10 @@ def serial_exists(chat_id):
     """Проверка что пользователь совладелец"""
     return session.query(exists().where(Groups.group_id == chat_id, Groups.serial_killer == 1)).scalar()
 
+def lottery_exists(chat_id):
+    """Проверка что пользователь совладелец"""
+    return session.query(exists().where(Groups.group_id == chat_id, Groups.lottery == 1)).scalar()
+
 
 def get_user(chat_id, user_id):
     """Получаем информацию о пользователе в чате"""
@@ -75,6 +88,13 @@ def get_users(chat_id):
     """Получаем информацию о пользователях чата"""
     return session.query(FlameNet).filter(
                 FlameNet.chat_id == chat_id
+            ).all()
+
+
+def get_users_prefix(chat_id):
+    """Получаем информацию о пользователях чата"""
+    return session.query(FlameNet).filter(
+                FlameNet.chat_id == chat_id, FlameNet.prefix_off
             ).all()
 
 
@@ -116,6 +136,11 @@ def get_com_rp(com, user_id):
 def get_rp():
     """Получение RP команд"""
     return session.query(RPContext).all()
+
+
+def get_rp_by_id(rp_id):
+    """Получение RP команд"""
+    return session.query(RPContext).filter(RPContext.id == rp_id).one_or_none()
 
 
 def get_user_rp(user_id):
@@ -184,15 +209,39 @@ def stop_victim(chat_id):
             if datetime.datetime.now() >= datetime.datetime.strptime(group.time_serial, '%Y-%m-%d %H:%M:%S'):
                 group.serial_killer = 0
                 group.time_serial = 0
-                group.lottery = 0
                 session.commit()
                 return True
         users = get_killer(chat_id)
         if len(users) == 25:
             group.serial_killer = 0
             group.time_serial = 0
-            group.lottery = 0
             session.commit()
             return True
         else:
             return False
+
+
+def delete_prefix(chat_id, user_id):
+    user = get_user(chat_id, user_id)
+    if not user.prefix_off:
+        return False
+    if datetime.datetime.now() >= datetime.datetime.strptime(user.prefix_off, '%Y-%m-%d %H:%M:%S'):
+        user.prefix_off = None
+        session.commit()
+        return True
+
+
+def all_owner():
+    return session.query(Main).all()
+
+
+def get_pair(chat_id):
+    return session.query(FlameNet).filter(FlameNet.chat_id == chat_id, FlameNet.wedding).all()
+
+
+def get_constant(user_id):
+    return session.query(Constants).filter(Constants.user_id == user_id).one_or_none()
+
+
+def get_constant_wedding(chat_id, user_id):
+    return session.query(Constants).filter(Constants.chat_id == chat_id, Constants.user_id == user_id).one_or_none()

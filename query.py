@@ -1,8 +1,8 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Table, create_engine
-from sqlalchemy.orm import relationship, backref, sessionmaker
+from sqlalchemy import Column, Integer, String, create_engine
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
-engine = create_engine('sqlite:///database.db')
+engine = create_engine('sqlite:///database.db', connect_args={'timeout': 10})
 engine.connect()
 Session = sessionmaker()
 Session.configure(bind=engine)
@@ -63,8 +63,6 @@ class Constants(Base):
     user_id = Column(Integer, unique=True)
     from_id = Column(Integer)
     chat_id = Column(String)
-    prefix_price = Column(Integer)
-    prefix_period = Column(Integer)
     mention = Column(String)
     person_first_name = Column(String)
     person_id = Column(Integer)
@@ -75,7 +73,7 @@ class Constants(Base):
 class Setting(Base):
     __tablename__ = 'setting'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True)
     money_for_game = Column(Integer, nullable=False, default=0)
     id_group_log = Column(String, unique=True)
     exp_for_message = Column(Integer, nullable=False, default=0)
