@@ -236,7 +236,7 @@ def all_owner():
 
 
 def get_pair(chat_id):
-    return session.query(FlameNet).filter(FlameNet.chat_id == chat_id, FlameNet.wedding).all()
+    return session.query(FlameNet).filter(FlameNet.chat_id == chat_id, FlameNet.wedding != 0, FlameNet.wedding_time).all()
 
 
 def get_constant(user_id):

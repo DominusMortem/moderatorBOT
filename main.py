@@ -105,7 +105,11 @@ class Tagall(StatesGroup):
 @client.on(events.NewMessage(chats=[1202181831, 1629215553, 1781348153, 1101450717]))
 async def normal_handler(event):
     message = event.message.to_dict()
+    me = await client.get_me()
     chat_id = f"-100{message['peer_id']['channel_id']}"
+    if me.username in message['message']:
+        return
+        #await client.send_message(message['peer_id']['channel_id'], '**Автоответчик**:\n```Абонент вне зоны доступа```', parse_mode='Markdown')
     if message['from_id']['user_id']:
         group = utils.get_group(chat_id)
         if message['entities'] and 'Игра окончена' in message['message'] and message['fwd_from'] is None:
@@ -283,23 +287,14 @@ async def prints(message: types.Message):
     for person in all:
         if not utils.user_exists(message.chat.id, person.id):
             count += 1
-            user = FlameNet(
-                chat_id=message.chat.id,
-                user_id=person.id,
-                username=person.username,
-                first_name=person.first_name,
-                is_active=1,
-                create_time=datetime.date.today(),
-                first_message=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            )
-            session.add(user)
-            session.commit()
             db.add_user(message.chat.id, person.id, person.username, person.first_name, 1)
-            noexist.append(person.id)
+        noexist.append(person.id)
     for person in utils.get_users(message.chat.id):
         if person.user_id not in noexist:
-            person.is_active=0
+            person.is_active = 0
             desactive += 1
+        else:
+            person.is_active = 1
     session.commit()
     await message.answer(f'Добавлено {count} пользователей\n Неактивных пользователей {desactive}')
 
@@ -321,15 +316,7 @@ async def check(message: types.Message):
 
 
 @dp.message_handler(lambda message: message.chat.type in ['supergroup', 'group', 'channel'] and not utils.setka(message.chat.id))
-async def t(message: types.Message):
-    msg = await bot.get_chat_member(message.chat.id, dict(await bot.get_me()).get('id'))
-    if msg.status == 'administrator':
-        if dict(msg)['can_invite_users']:
-            if dict(msg)['can_restrict_members']:
-                if dict(msg)['can_manage_chat']:
-                    if dict(msg)['can_promote_members']:
-                        return
-    await message.answer('Мне нужны все права администратора для работы!')
+async def no_work(message: types.Message):
     return
 
 
@@ -992,6 +979,8 @@ async def ent(message: types.Message):
     else:
         username = message.text.split()[1]
         user = utils.get_user_by_username(message.chat.id, username[1:])
+        if not user:
+            return
         user_id = user.user_id
         first_name = user.first_name
         username = username[1:]
@@ -1073,7 +1062,7 @@ async def stats(message: types.Message):
     mention_max = await mention_text(max_message[2], max_message[1])
     min_message = min([(user.count_message, user.user_id, user.first_name) for user in users])
     mention_min = await mention_text(min_message[2], min_message[1])
-    wedding = len([user.wedding for user in users if user.wedding != '0']) // 2
+    wedding = len([user.wedding for user in users if user.wedding]) // 2
     cash = sum([user.cash for user in users])
     max_cash = max([(user.cash, user.user_id, user.first_name) for user in users])
     mention_cash = await mention_text(max_cash[2], max_cash[1])
@@ -1133,10 +1122,11 @@ async def get_pair(message: types.Message):
         for k, v in dict_pair.items():
             mention = await mention_text(v[1], k)
             user_two = utils.get_user(message.chat.id, v[0])
-            mention_two = await mention_text(user_two.first_name, v[0])
-            day_wending = (datetime.datetime.now() - v[2]).total_seconds()
-            text += fmt.text(fmt.text(count), ') ', fmt.hlink(*mention), f' и {fmt.hlink(*mention_two)} в браке: {utils.wedding_date_now(day_wending)}.\n')
-            count += 1
+            if user_two:
+                mention_two = await mention_text(user_two.first_name, v[0])
+                day_wending = (datetime.datetime.now() - v[2]).total_seconds()
+                text += fmt.text(fmt.text(count), ') ', fmt.hlink(*mention), f' и {fmt.hlink(*mention_two)} в браке: {utils.wedding_date_now(day_wending)}.\n')
+                count += 1
         await message.answer(text)
 
 
@@ -1176,6 +1166,8 @@ async def wedding(message: types.Message):
         session.commit()
     person_one = utils.get_user(message.chat.id, message.from_user.id)
     person_two = utils.get_user(message.chat.id, user_id)
+    if not person_one and not person_two:
+        return
     if not person_one.wedding and not person_two.wedding:
         msg = await message.answer(f'💗{fmt.hlink(*mention_two)}, минуту внимания!\n'
                                    f'{fmt.hlink(*mention_one)} сделал(а) вам предложение руки и сердца.🥰',
@@ -1226,7 +1218,9 @@ async def no_marry(message: types.Message):
         person_two = utils.get_user(message.chat.id, user.wedding)
         mention_two = await mention_text(person_two.first_name, person_two.user_id)
         user.wedding = 0
+        user.wedding_time = None
         person_two.wedding = 0
+        person_two.wedding_time = None
         session.commit()
         msg = await message.answer(f'💔Сожалеем {fmt.hlink(*mention_two)}, {fmt.hlink(*mention)} решил(а) разорвать отношения между вами.')
         asyncio.create_task(delete_message(msg, 10))
@@ -1248,8 +1242,9 @@ async def wedding_answer(callback_query: types.CallbackQuery):
     await bot.answer_callback_query(callback_query.id)
     wedding_constant = utils.get_constant_wedding(
         callback_query.message.chat.id, callback_query.from_user.id)
-    session.delete(wedding_constant)
-    session.commit()
+    if wedding_constant:
+        session.delete(wedding_constant)
+        session.commit()
     try:
         mention_one = await mention_text(wedding_constant.person_first_name, wedding_constant.person_id)
         mention_two = await mention_text(wedding_constant.person_two_first_name, wedding_constant.person_two_id)
@@ -1328,6 +1323,8 @@ async def add_karma(message: types.Message):
         first_name = message.reply_to_message.from_user.first_name
         if utils.user_exists(message.chat.id, user_id):
             user = utils.get_user(message.chat.id, user_id)
+            if not user:
+                return
             if message.text == '+':
                 user.reputation += 1
             else:
@@ -1504,7 +1501,11 @@ async def user_joined(message: types.Message):
             elif message.chat.id == -1001629215553:
                 setting = utils.get_setting()
                 if setting.gif:
-                    text = f'Привет, {fmt.hlink(*mention)}|<code>{user.id}</code>, добро пожаловать в {message.chat.title}.\n Попал во время игры? Отправь команду /join и играй. Первые три раза бесплатно.\nОбязательно прочитай наши правила, ниже ссылки на чаты:'
+                    text = (f'{fmt.hlink(*mention)}|<code>{user.user_id}</code>\n'
+                            f'Добро пожаловать в увлекательный мир комбат мафии🥷👻'
+                            f'Ниже ты найдешь полезные ссылки, которые помогут тебе быстрее освоиться в чате {message.chat.title}\n'
+                            f'📌Идет игра и желаешь присоединиться? Жми /join\n'
+                            f'💢Обрати внимание, что только первые 3 захода бесплатны, советую всем зайти на ссылке ниже:')
                     buttons = [
                         types.InlineKeyboardButton('Правила', url='https://t.me/flamecombatrules'),
                         types.InlineKeyboardButton('Описание ролей', url='https://t.me/flamecombatroles'),
@@ -1597,15 +1598,15 @@ async def ban(message: types.Message):
     else:
         mention = await mention_text(first_name, user_id)
         user = utils.get_user(chat_id, from_id)
-        if text[-1] == '1':
+        if text[-1] == '0':
+            user.ban = 0
+            await bot.unban_chat_member(message.chat.id, user_id, only_if_banned=True)
+            await message.answer(f'Пользователь {fmt.hlink(*mention)} разбанен.')
+        else:
             user.ban = 1
             user.time_ban = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             await bot.ban_chat_member(message.chat.id, user_id)
             await message.answer(f'Пользователь {fmt.hlink(*mention)} забанен.\nПричина: Систематические нарушения правил.')
-        else:
-            user.ban = 0
-            await bot.unban_chat_member(message.chat.id, user_id, only_if_banned=True)
-            await message.answer(f'Пользователь {fmt.hlink(*mention)} разбанен.')
         session.commit()
     await info_message(
         'ban',
@@ -1717,6 +1718,7 @@ async def tag_set(message: types.Message):
         admin,
         moder
     ]):
+        await message.answer('Прав недостаточно!')
         return
     await Tagall.func.set()
     await message.answer('Введите команду /run (текст призыва)')
@@ -2401,7 +2403,7 @@ async def rp_commands(message: types.Message, state=FSMContext):
     text = message.text.split('|')
     if len(text) == 3:
         smile, command, desc = text
-        await state.update_data(prefix=smile, com=command, desc=desc)
+        await state.update_data(prefix=smile, com=command.lower(), desc=desc)
         keyboard = types.InlineKeyboardMarkup()
         keyboard.add(types.InlineKeyboardButton('Сохранить', callback_data='rp_ok'))
         keyboard.add(types.InlineKeyboardButton('Изменить', callback_data=f'rp_cancel_{command}'))
@@ -2465,7 +2467,6 @@ async def rp_delete(callback_query: types.CallbackQuery, state=FSMContext):
         await callback_query.message.delete()
         return
     rp_com = utils.get_rp_by_id(callback_query.data.split('_')[-1])
-    print(rp_com.id)
     session.delete(rp_com)
     session.commit()
     await callback_query.answer('Удалено.')
@@ -2845,7 +2846,6 @@ async def lottery_result(message):
                 await message.answer(text)
                 await message.answer('Выбираем победителей!')
                 await asyncio.sleep(10)
-                x = 0
                 if len(users_lottery) >= 5:
                     x = 5
                 else:
@@ -2923,8 +2923,8 @@ async def mess_handler(message: types.Message):
             first_message=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         )
         session.add(user)
-    else:
-        user = utils.get_user(chat_id, from_id)
+        session.commit()
+    user = utils.get_user(chat_id, from_id)
     user.last_message = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     if not user.count_message:
         user.first_message = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -2935,6 +2935,7 @@ async def mess_handler(message: types.Message):
     user.count_message += 1
     user.message = text
     user.message_id = message.message_id
+    user.is_active = 1
     session.commit()
 
     mention = await mention_text(message.from_user.first_name, message.from_user.id)
