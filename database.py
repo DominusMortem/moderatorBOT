@@ -32,7 +32,8 @@ class Database:
             serial_killer INT NOT NULL DEFAULT 0,
             time_serial TEXT NOT NULL DEFAULT 0,
             setka INT NOT NULL DEFAULT 0,
-            lottery INT NOT NULL DEFAULT 0);"""
+            lottery INT NOT NULL DEFAULT 0,
+            revo INT NOT NULL DEFAULT 0);"""
         )
         self.cursor.execute(
             """CREATE TABLE IF NOT EXISTS setting(

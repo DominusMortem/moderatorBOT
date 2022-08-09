@@ -92,6 +92,7 @@ class Groups(Base):
     time_serial = Column(String, nullable=False, default='0')
     setka = Column(Integer, nullable=False, default=0)
     lottery = Column(Integer, nullable=False, default=0)
+    revo = Column(Integer, nullable=False, default=0)
 
 
 class Banned(Base):

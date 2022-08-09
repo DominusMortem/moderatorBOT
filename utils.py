@@ -35,6 +35,10 @@ def wedding_date_now(date):
     return f'{day} д. {hour} ч. {minute} мин. {seconds} сек'
 
 
+def roulette_exist(chat_id):
+    return session.query(exists().where(Groups.group_id == chat_id, Groups.revo == 1)).scalar()
+
+
 def user_exists(chat_id, user_id):
     """Проверка что пользователь существует в чате"""
     return session.query(exists().where(FlameNet.chat_id == chat_id, FlameNet.user_id == user_id)).scalar()
