@@ -23,11 +23,11 @@ import utils
 from permissions import is_admin, is_moder, is_owner, is_big_owner
 from query import session, FlameNet, Main, Groups, Lottery, Banned, RPContext, Killer, VIP, Constants, Setting
 
-range_tab = {'Очень злой': range(-500, -300),
-             'Злой': range(-300, -100),
-             'Нейтральный': range(-100, 100),
-             'Добрый': range(100, 300),
-             'Очень добрый': range(300, 501)}
+range_tab = {'👹Очень злой': range(-500, -300),
+             '😈Злой': range(-300, -100),
+             '😐Нейтральный': range(-100, 100),
+             '😊Добрый': range(100, 300),
+             '😇Очень добрый': range(300, 501)}
 exp_tab = {
     0: ('Преступник', 'Обитатель', 'Хранитель'),
     200: ('Вне закона', 'Отступник', 'Мученик'),
@@ -65,10 +65,10 @@ TIMECHECK = {'м': 60,
              'ч': 3600}
 
 
-box = ['🎸гитара',
-       '🎂торт',
-       '🔪нож',
-       '💰кот в мешке',
+box = ['🎸Гитара',
+       '🎂Торт',
+       '🔪Нож',
+       '💰Кот в мешке',
        '🛳️Яхта',
        '🛩️Самолет',
        '🧳Чемодан',
@@ -81,7 +81,13 @@ box = ['🎸гитара',
        '🪒Бритва',
        '🧹Метла',
        '🚗Автомобиль',
-       '🚁Вертолет']
+       '🚁Вертолет',
+       '🗿Статуя острова Пасхи',
+       '🪄Бузинная палочка',
+       '🗡️Световой меч',
+       '💩Кусок говна',
+       '🧿Воскрешающий камень',
+       '🦺Мантия невидимости']
 
 short_commands = ['обнять', 'казнить', 'побить', 'любовь', 'недоверие', 'тусить', 'поцеловать', 'танец', 'ругать',
                   'цветы', 'сплетни', 'взятка', 'заказать']
@@ -103,6 +109,7 @@ class Tagall(StatesGroup):
     group = State()
     rp = State()
     prefix = State()
+    lot = State()
 
 
 @client.on(events.NewMessage(chats=[1202181831, 1629215553, 1781348153, 1101450717]))
@@ -110,15 +117,14 @@ async def normal_handler(event):
     message = event.message.to_dict()
     me = await client.get_me()
     chat_id = f"-100{message['peer_id']['channel_id']}"
-    if me.username in message['message']:
-        return
-        #await client.send_message(message['peer_id']['channel_id'], '**Автоответчик**:\n```Абонент вне зоны доступа```', parse_mode='Markdown')
     if message['from_id']['user_id']:
         group = utils.get_group(chat_id)
         if message['entities'] and 'Игра окончена' in message['message'] and message['fwd_from'] is None:
             group.silent_mode = 0
             group.revo = 0
             session.commit()
+            if chat_id == '-1001629215553':
+                return
             if 'Остальные участники:' in message['message']:
                 text = message['message'].partition('Остальные участники:')[0]
                 winners = list([x for _, x in re.findall(r'(\s{4}(.*?)\s-)', text)])
@@ -172,6 +178,13 @@ async def normal_handler(event):
 client.start()
 
 
+@dp.message_handler(commands=['um'])
+async def um(message: types.Message):
+    await bot.restrict_chat_member('-1001781348153', message.from_user.id,
+                                   permissions=types.ChatPermissions(True, True, True, True, True, True, True,
+                                                                     True))
+
+
 async def try_delete(message):
     try:
         await message.delete()
@@ -179,6 +192,227 @@ async def try_delete(message):
     except (MessageToDeleteNotFound, MessageCantBeDeleted):
         pass
     return
+
+
+@dp.message_handler(commands=['carma'])
+async def carm(message: types.Message):
+    await try_delete(message)
+    if utils.salent(message.chat.id):
+        return
+    text = '⚠️Начисление кармы производится ответом на сообщение со знаком "+" или "-"\n Таблица очков приведена ниже:\n'
+    text += 'Карма | Границы очков кармы\n'
+    for k, v in range_tab.items():
+        text += f'Карма: <code>{k}</code> | Значение: <b>{v.start|v.stop}</b>\n'
+    text += ('\n⚠️Очки кармы начисляются автоматически в зависимости от вашей активности в чате.'
+             'Титул автоматически присваивается при достижении порогового значения опыта и зависит от текущего значения кармы\n'
+             'Таблица опыта приведена ниже\n'
+             '<b>ОПЫТ - Злой|Нейтрал|Добрый</b>\n\n')
+    for k, v in exp_tab.items():
+        text += f'Опыт: <code>{k}</code> - <code>{"|".join(v)}</code>\n'
+    text += '\nПосмотреть текущий статус кармы можно командой <code>/карма</code>'
+    await message.answer(text)
+
+
+@dp.message_handler(commands=['тишина'])
+async def silents(message: types.Message):
+    await try_delete(message)
+    if not any([
+        is_big_owner(message.from_user.id),
+        is_owner(message.from_user.id),
+        is_admin(message.chat.id, message.from_user.id),
+        is_moder(message.chat.id, message.from_user.id)
+    ]):
+        await message.answer('Недостаточно прав')
+        return
+    text = message.text.split()
+    group = utils.get_group(message.chat.id)
+    if len(text) == 1:
+        group.silent_mode = 1
+        t = 'Принудительный тихий режим, команды отключены'
+    else:
+        group.silent_mode = 0
+        t = 'Тихий режим выключен, команды включены'
+    session.commit()
+    await message.answer(t)
+
+
+@dp.message_handler(commands='lottery')
+async def lottery(message: types.Message):
+    await try_delete(message)
+    if utils.lottery_exists(message.chat.id):
+        return
+    if utils.salent(message.chat.id):
+        return
+    text = message.text.split()
+    if len(text) == 1:
+        return
+    user = utils.get_user(message.chat.id, message.from_user.id)
+    mention = await mention_text(user.first_name, user.user_id)
+    keyboard = types.InlineKeyboardMarkup()
+    group = utils.get_group(message.chat.id)
+    if group.serial_killer != 0:
+        return
+    coin = int(message.text.split()[1])
+    if len(text) == 2:
+        if user.cash < coin:
+            await message.answer('Недостаточно средств.')
+            return
+        await Tagall.lot.set()
+        keyboard.add(types.InlineKeyboardButton('Присоединиться', callback_data=f'lottery_{coin}_{user.user_id}'))
+        t = f'{fmt.hlink(*mention)} начал розыгрыш своих {coin} 𝐹𝑙𝑎𝑚𝑒 𝐶𝑜𝑖𝑛 💮'
+        state = Dispatcher.get_current().current_state()
+        await state.update_data(coin=coin)
+    if len(text) >= 3:
+        items = user.items
+        if not items:
+            await message.answer('Вам нечего предложить!')
+            return
+        item = ' '.join(text[2:])
+        if item not in items:
+            await message.answer('Такого предмета у вас нет!')
+            return
+        item = utils.get_item_user(user, item)
+        await Tagall.lot.set()
+        group = utils.get_group(message.chat.id)
+        keyboard.add(types.InlineKeyboardButton('Ставка', callback_data=f'auction_{text[2]}_{user.user_id}_{coin}_{user.user_id}'))
+        t = f'{fmt.hlink(*mention)} начал аукцион {item}. Начальная ставка {coin} 𝐹𝑙𝑎𝑚𝑒 𝐶𝑜𝑖𝑛 💮.'
+    m = await message.answer(t, reply_markup=keyboard)
+    await bot.pin_chat_message(chat_id=message.chat.id, message_id=m.message_id)
+    group.lottery = m.message_id
+    session.commit()
+
+
+@dp.callback_query_handler(lambda call: 'lottery' in call.data, state='*')
+async def join_lottery(callback_query: types.CallbackQuery):
+    if not utils.user_lottery(callback_query.message.chat.id, callback_query.from_user.id):
+        victim = Killer(user_id=callback_query.from_user.id, first_name=callback_query.from_user.first_name, chat_id=callback_query.message.chat.id)
+        session.add(victim)
+    else:
+        return
+    data = callback_query.data.split('_')
+    users_lottery = utils.get_killer(callback_query.message.chat.id)
+    user = utils.get_user(callback_query.message.chat.id, data[2])
+    group = utils.get_group(callback_query.message.chat.id)
+    mention = await mention_text(user.first_name, user.user_id)
+    keyboard = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton('Присоединиться', callback_data=f'lottery_{data[1]}_{data[2]}'))
+    text = f'{fmt.hlink(*mention)} начал розыгрыш своих {data[1]} 𝐹𝑙𝑎𝑚𝑒 𝐶𝑜𝑖𝑛 💮\nУчастники:\n'
+    for i in range(len(users_lottery)):
+        mention = await mention_text(users_lottery[i].first_name, users_lottery[i].user_id)
+        text += f'{i+1}) {fmt.hlink(*mention)}\n'
+    await bot.edit_message_text(text, callback_query.message.chat.id, group.lottery, reply_markup=keyboard)
+
+
+@dp.callback_query_handler(lambda call: 'auction' in call.data, state='*')
+async def auction(callback_query: types.CallbackQuery, state: FSMContext):
+    _, item, starter_id, price, user_id = callback_query.data.split('_')
+    user = utils.get_user(callback_query.message.chat.id, user_id)
+    group = utils.get_group(callback_query.message.chat.id)
+    mention = await mention_text(user.first_name, user.user_id)
+    if starter_id[0] != 'l':
+        mention = await mention_text(callback_query.from_user.first_name, callback_query.from_user.id)
+        starter = utils.get_user(callback_query.message.chat.id, starter_id)
+        item = utils.get_item_user(starter, item)
+        mention_start = await mention_text(starter.first_name, starter.user_id)
+        keyboard = types.InlineKeyboardMarkup().add(
+            types.InlineKeyboardButton(
+                'Ставка', callback_data=f'auction_{item}_{starter_id}_{int(price) + 1}_{callback_query.from_user.id}'
+            ),
+            types.InlineKeyboardButton(
+                'Продано', callback_data=f'auction_{item}_l{starter_id}_{int(price) + 1}_{callback_query.from_user.id}'
+            ),
+        )
+        text = (f'{fmt.hlink(*mention_start)} начал аукцион {item}. Ставка {price} 𝐹𝑙𝑎𝑚𝑒 𝐶𝑜𝑖𝑛 💮.\n'
+                f'{fmt.hlink(*mention)} поставил {int(price) + 1} 𝐹𝑙𝑎𝑚𝑒 𝐶𝑜𝑖𝑛 💮')
+    else:
+        if callback_query.from_user.id != int(starter_id[1:]):
+            return
+        starter = utils.get_user(callback_query.message.chat.id, callback_query.from_user.id)
+        await state.finish()
+        starter.cash += int(price)
+        i = utils.items(starter, item, 1)
+        if not i:
+            starter.items = 0
+        else:
+            starter.items = i
+        if user.cash <= int(price):
+            user.cash = 0
+        else:
+            user.cash -= int(price)
+        user.items = utils.items(user, item)
+        keyboard = None
+        mention_start = await mention_text(callback_query.from_user.first_name, callback_query.from_user.id)
+        text = (f'{fmt.hlink(*mention_start)} остановил аукцион {item}.\n'
+                f'Выйграла ставка {fmt.hlink(*mention)} - {int(price)} 𝐹𝑙𝑎𝑚𝑒 𝐶𝑜𝑖𝑛 💮')
+        msg = await bot.edit_message_text(text, callback_query.message.chat.id, group.lottery, reply_markup=keyboard)
+        group.lottery = 0
+        session.commit()
+        await asyncio.create_task(delete_message(msg, 3))
+        return
+    await bot.edit_message_text(text, callback_query.message.chat.id, group.lottery, reply_markup=keyboard)
+
+
+@dp.message_handler(commands=['дать'])
+async def give(message: types.Message):
+    await try_delete(message)
+    if utils.salent(message.chat.id):
+        return
+    item = message.text[6:]
+    if not message.reply_to_message:
+        return
+    user_one = utils.get_user(message.chat.id, message.from_user.id)
+    user_two = utils.get_user(message.chat.id, message.reply_to_message.from_user.id)
+    mention_one = await mention_text(user_one.first_name, user_one.user_id)
+    mention_two = await mention_text(user_two.first_name, user_two.user_id)
+    item = utils.get_item_user(user_one, item)
+    if not item:
+        return
+    i = utils.items(user_one, item, 1)
+    if not i:
+        user_one.items = 0
+    else:
+        user_one.items = i
+    user_two.items = utils.items(user_two, item)
+    await message.answer(f'{fmt.hlink(*mention_one)} передал {item} в руки {fmt.hlink(*mention_two)}')
+
+
+@dp.message_handler(commands=['end'], state='*')
+async def end(message: types.Message, state: FSMContext):
+    await try_delete(message)
+    data = await state.get_data()
+    group = utils.get_group(message.chat.id)
+    await state.finish()
+    if data:
+        user = utils.get_user(message.chat.id, message.from_user.id)
+        users_lottery = utils.get_killer(message.chat.id)
+        mention = await mention_text(user.first_name, user.user_id)
+        text = f'{fmt.hlink(*mention)} закончил розыгрыш своих {data["coin"]} 𝐹𝑙𝑎𝑚𝑒 𝐶𝑜𝑖𝑛 💮\nУчастники:\n'
+        for i in range(len(users_lottery)):
+            mention = await mention_text(users_lottery[i].first_name, users_lottery[i].user_id)
+            text += f'{i+1}) {fmt.hlink(*mention)}\n'
+        random.shuffle(users_lottery)
+        winner = random.choice(users_lottery)
+        mention_winner = await mention_text(winner.first_name, winner.user_id)
+        text += f'\n🏆Победитель - {fmt.hlink(*mention_winner)}. Поздравляем!'
+        await message.answer(text)
+        user_winner = utils.get_user(message.chat.id, winner.user_id)
+        if user.cash <= data["coin"]:
+            user.cash = 0
+        else:
+            user.cash -= data["coin"]
+        user_winner.cash += data["coin"]
+        await bot.delete_message(message.chat.id, group.lottery)
+        session.query(Killer).filter(Killer.chat_id == message.chat.id).delete()
+        group.lottery = 0
+        session.commit()
+    if any([
+        is_big_owner(message.from_user.id),
+        is_owner(message.from_user.id),
+        is_admin(message.chat.id, message.from_user.id),
+    ]):
+        await bot.delete_message(message.chat.id, group.lottery)
+        session.query(Killer).filter(Killer.chat_id == message.chat.id).delete()
+        group.lottery = 0
+        session.commit()
 
 
 @dp.message_handler(lambda m: m.text.lower() == 'заказать')  # действия
@@ -336,16 +570,7 @@ async def bot_on(message: types.Message):
         await message.answer('Бот выключен')
 
 
-@dp.message_handler(commands=['silent'])
-async def silent(message: types.Message):
-    await try_delete(message)
-    group = session.query(Groups).filter(Groups.group_id == message.chat.id).one_or_none()
-    group.silent_mode = 0
-    session.commit()
-    await message.answer('Тихий режим выключен!')
-
-
-@dp.message_handler(commands='extermination')
+# @dp.message_handler(commands='extermination')
 async def extermination(message: types.Message):
     await try_delete(message)
     if not is_big_owner(message.from_user.id):
@@ -463,7 +688,7 @@ async def all_stats(message: types.Message):
 
 
 @dp.message_handler(commands=['розыгрыш'])
-async def lottery(message: types.Message):
+async def fast_lottery(message: types.Message):
     await try_delete(message)
     if message.chat.type == 'private':
         return
@@ -507,7 +732,8 @@ async def cur(message: types.Message):
     if message.chat.type == 'private':
         return
     if utils.salent(message.chat.id):
-        await try_delete(message)
+        return
+    if utils.lottery_exists(message.chat.id):
         return
     text = message.text.split()
     try:
@@ -516,7 +742,7 @@ async def cur(message: types.Message):
             time_serial = datetime.datetime.strptime(group.time_serial, '%Y-%m-%d %H:%M:%S')
             await message.answer(f'Курьер прибудет в {time_serial.strftime("%H:%M:%S")}')
         else:
-            t = 1
+            t = 5
             if len(text) == 2 and text[1].isdigit():
                 t = int(text[1])
             dates = datetime.datetime.now() + datetime.timedelta(minutes=t)
@@ -540,7 +766,7 @@ async def items(message: types.Message):
         items = [x.split(':') for x in [item for item in user.items.split(',')]]
         items_to_dict = {x: int(y) for x, y in items}
         for k, v in items_to_dict.items():
-            text += f'{k} - {v} шт.\n'
+            text += f'<code>{k}</code> - {v} шт.\n'
     await message.answer(text)
 
 
@@ -556,10 +782,13 @@ async def news(message: types.Message):
     await try_delete(message)
     if message.chat.type == 'private':
         return
-    await message.answer('⚠Обновление бота на 13.07.22:\n'
-                         'Добавлена функция быстрых розыгрышей. По команде /лотерея, владелец может запустить розыгрыш.'
-                         'Для участия необходимо лишь быть активным в чате. Победители определяются по достижении'
-                         ' 25 участников или 10 минут. Побеждают 5 человек, награда 3 𝐹𝑙𝑎𝑚𝑒 𝐶𝑜𝑖𝑛 💮')
+    await message.answer('⚠Обновление бота на 12.08.22:\n'
+                         'Обновлена команда <code>/курьер</code> После активации в течении минуты, курьер принесет случайную вещь'
+                         ' активному участнику чата, достаточно лишь написать что то в чат. Вещь добавится в инвентарь.'
+                         ' Посмотреть инвентарь команда <code>/вещи</code> Название всех предметов кликабельны, можно'
+                         ' скопировать название нажав на него. Для каждого предмета досутпна RP команда в чате, вызывается'
+                         ' в ответ на сообщение, по названию самого предмета. После использования предмет расходуется.'
+                         ' Предметы можно передавать через команду <code>/дать (название предмета)</code>')
 
 
 @dp.message_handler(commands=['talk'])
@@ -963,11 +1192,27 @@ async def command(message: types.Message):
     person_one = await mention_text(message.from_user.first_name, message.from_user.id)
     person_two = await mention_text(message.reply_to_message.from_user.first_name,
                                       message.reply_to_message.from_user.id)
-    if utils.check_rp(com=message.text.lower(), user_id=message.from_user.id):
+    user_two = utils.get_user(message.chat.id, message.reply_to_message.from_user.id)
+    if not user_two.is_active:
+        return
+    user = utils.get_user(message.chat.id, message.from_user.id)
+    item = utils.get_item_user(user, message.text)
+    if item:
+        rp = utils.get_com_rp(message.text.lower(), 0)
+        i = utils.items(user, item, 1)
+        if not i:
+            user.items = 0
+        else:
+            user.items = i
+        if not rp:
+            return
+    elif utils.check_rp(com=message.text.lower(), user_id=message.from_user.id):
         rp = utils.get_com_rp(message.text.lower(), message.from_user.id)
         if not rp:
             return
     else:
+        if message.text.lower() in [x[1:].lower() for x in box]:
+            return
         rp = utils.get_com_rp(message.text.lower(), 0)
         if not rp:
             return
@@ -1234,6 +1479,7 @@ async def get_pair(message: types.Message):
         text = f'Всего пар в {message.chat.title}: <b>{len(dict_pair)}</b>:\n'
         dict_pair = {k: v for k, v in sorted(dict_pair.items(), key=lambda item: item[1][2])}
     count = 1
+    t = 0
     for k, v in dict_pair.items():
         mention = await mention_text(v[1], k)
         user_two = utils.get_user(message.chat.id, v[0])
@@ -1241,7 +1487,12 @@ async def get_pair(message: types.Message):
             mention_two = await mention_text(user_two.first_name, v[0])
             day_wending = (datetime.datetime.now() - v[2]).total_seconds()
             text += fmt.text(fmt.text(count), ') ', fmt.hlink(*mention), f' и {fmt.hlink(*mention_two)} в браке: {utils.wedding_date_now(day_wending)}.\n')
+            t += 1
             count += 1
+            if t == 30:
+                await message.answer(text)
+                t = 0
+                text = ''
     await message.answer(text)
 
 
@@ -1365,6 +1616,8 @@ async def wedding_answer(callback_query: types.CallbackQuery):
     if wedding_constant:
         session.delete(wedding_constant)
         session.commit()
+    if not wedding_constant.person_two_id:
+        return
     try:
         if callback_query.from_user.id == wedding_constant.person_two_id:
             mention_one = await mention_text(wedding_constant.person_first_name, wedding_constant.person_id)
@@ -1418,17 +1671,17 @@ async def carma(message: types.Message):
         if user.karma <= k:
             karma_title = v
             break
-    if rank == 'Нейтральный':
+    if rank == '😐Нейтральный':
         karma_title = karma_title[1]
-    elif rank in ('Добрый','Очень добрый'):
+    elif rank in ('😊Добрый', '😇Очень добрый'):
         karma_title = karma_title[2]
     else:
         karma_title = karma_title[0]
     mention = await mention_text(first_name, user_id)
     text = fmt.text(fmt.hlink(*mention),
-            f'\n✨|Ваша карма: {rank} ({user.reputation})\n',
-            f'🏅|Очки кармы: {user.karma}\n',
-            f'☯️|Ваш кармический титул: {karma_title}')
+                    f'\n✨|Ваша карма: {rank} ({user.reputation})\n',
+                    f'🏅|Очки кармы: {user.karma}\n',
+                    f'☯️|Ваш кармический титул: {karma_title}')
     await message.answer(text)
 
 
@@ -1515,7 +1768,13 @@ async def info(message: types.Message):
             f'🆙|Опыт: {user.exp}\n'
             f'🕐|Последнее ограничение: {user.mute_reason or "Не было"}\n'
             )
-    await message.answer(text)
+    vip_user = utils.vip(user_id)
+    if vip_user:
+        text += f"\n\n 🧧VIP статус активен до - {datetime.datetime.strptime(vip_user.until_date, '%Y-%m-%d %H:%M:%S')}"
+        msg = await message.answer_photo('https://i.ytimg.com/vi/d1iytopvJAE/hqdefault.jpg', text)
+    else:
+        msg = await message.answer(text)
+    await asyncio.create_task(delete_message(msg, 10))
     await info_message(
         'info',
         message.chat.title,
@@ -1529,7 +1788,7 @@ async def info(message: types.Message):
     )
 
 
-@dp.message_handler(commands=['admins'])
+@dp.message_handler(commands=['администрация'])
 async def admins(message: types.Message):
     await try_delete(message)
     if message.chat.type == 'private':
@@ -1544,9 +1803,12 @@ async def admins(message: types.Message):
     ]):
         return
     admins, moders, owners = utils.get_all_admin(message.chat.id)
-    text = fmt.text(fmt.hlink(*await mention_text('Владелец', config.ADMIN_ID)), '\n')
+    big_owner = session.query(FlameNet).filter(FlameNet.user_id == config.ADMIN_ID).all()[0]
+    text = 'Владелец:\n'
+    text += fmt.text(fmt.hlink(*await mention_text(big_owner.first_name, big_owner.user_id)), '\n')
+    text += 'Совладельцы:\n'
     for owner in owners:
-        mention = await mention_text('Совладелец', owner.owner_id)
+        mention = await mention_text(owner.first_name, owner.user_id)
         text += fmt.text(fmt.hlink(*mention), '\n')
     text += 'Администраторы:\n'
     for admin in admins:
@@ -1699,7 +1961,12 @@ async def ban(message: types.Message):
         moder
     ]):
         return
-    user_id, first_name, username = await ent(message)
+    if not message.reply_to_message:
+        user_id, first_name, username = await ent(message)
+    else:
+        user_id = message.reply_to_message.from_user.id
+        first_name = message.reply_to_message.from_user.first_name
+        username = message.reply_to_message.from_user.username
     if not utils.user_exists(message.chat.id, user_id):
         await message.answer('Пользователь отсутствует в базе, обновите базу через /print')
     is_owner_user = is_owner(user_id)
@@ -1855,17 +2122,14 @@ async def tag_set(message: types.Message):
 async def tag(message: types.Message, state: FSMContext):
     chat_id = message.chat.id
     text = message.text.split()
-    try:
-        await message.delete()
-    except (MessageToDeleteNotFound, MessageCantBeDeleted):
-        pass
+    await try_delete(message)
     try:
         if len(text) >= 2:
             count = 0
             response = f'{" ".join(text[1:])}\n'
-            users = utils.get_users(chat_id)[:101]
+            users = utils.get_users(chat_id)
             random.shuffle(users)
-            for user in users:
+            for user in users[:101]:
                 if not await state.get_state():
                     break
                 mention = await mention_text(user.first_name, user.user_id)
@@ -1893,11 +2157,11 @@ async def check_tag(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(Text(equals="стоп", ignore_case=True), state=Tagall.func)
-@dp.message_handler(Text(equals="отмена", ignore_case=True), state=Tagall.func)
+@dp.message_handler(Text(equals="отмена", ignore_case=True), state=Tagall.lot)
 async def stop(message: types.Message,  state=FSMContext):
     await state.finish()
     mention = await mention_text(message.from_user.first_name, message.from_user.id)
-    await message.answer(f'{fmt.hlink(*mention)}, призыв остановлен!')
+    await message.answer(f'{fmt.hlink(*mention)}, действие отменено!')
 
 
 @dp.message_handler(commands=['игнор'])
@@ -2058,7 +2322,6 @@ async def gift(message: types.Message):
         if not message.reply_to_message:
             await message.reply('Эта команда должна быть ответом на сообщение!')
             return
-
         user_id = message.reply_to_message.from_user.id
         first_name = message.reply_to_message.from_user.first_name
         username = message.reply_to_message.from_user.username
@@ -2418,28 +2681,31 @@ async def unmute(message: types.Message):
 
 
 async def add_mute(chat_id, first_name, user_id, times, reason):
-    await bot.restrict_chat_member(chat_id, user_id,
-                                   until_date=int(time.time()) + int(times[:-1]) * TIMECHECK.get(times[-1], 1))
     user = utils.get_user(chat_id, user_id)
-    user.mute += 1
-    user.mute_reason = f'{times} {reason}'
-    user.time_mute = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     mention = await mention_text(first_name, user_id)
-    if user.mute >= 20:
+    try:
+        await bot.restrict_chat_member(chat_id, user_id,
+                                       until_date=int(time.time()) + int(times[:-1]) * TIMECHECK.get(times[-1], 1))
+        user.mute += 1
+        user.mute_reason = f'{times} {reason}'
+        user.time_mute = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        if user.mute >= 20:
+            await bot.send_message(
+                chat_id, f'{fmt.hlink(*mention)} у вас очень много нарушений.\nСкоро бот выдаст автоматический бан.\nРекомендуется купить разварн в магазине!')
+        if user.mute >= 25:
+            user.ban = 1
+            user.time_ban = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            await bot.ban_chat_member(chat_id, user_id)
+            await bot.send_message(
+            chat_id, f'Пользователь {fmt.hlink(*mention)} забанен.\nПричина: Количество нарушений превысило лимит.')
+            return
+        session.commit()
         await bot.send_message(
-            chat_id, f'{fmt.hlink(*mention)} у вас очень много нарушений.\nСкоро бот выдаст автоматический бан.\nРекомендуется купить разварн в магазине!')
-    if user.mute >= 25:
-        user.ban = 1
-        user.time_ban = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        await bot.ban_chat_member(chat_id, user_id)
-        await bot.send_message(
-        chat_id, f'Пользователь {fmt.hlink(*mention)} забанен.\nПричина: Количество нарушений превысило лимит.')
-        return
-    session.commit()
-    await bot.send_message(
-        chat_id,
-        f'Пользователь {fmt.hlink(*mention)} получил мут на {times[:-1]} {utils.time_check(times[-1], int(times[:-1]))}.\nПричина: {reason}\nНарушений: {user.mute}'
-    )
+            chat_id,
+            f'Пользователь {fmt.hlink(*mention)} получил мут на {times[:-1]} {utils.time_check(times[-1], int(times[:-1]))}.\nПричина: {reason}\nНарушений: {user.mute}'
+        )
+    except (exceptions.NotEnoughRightsToRestrict, exceptions.UserIsAnAdministratorOfTheChat):
+        await bot.send_message(chat_id, f'Мне недостаточно прав, что бы выдать мут {fmt.hlink(*mention)}. Нужна помощь администрации.')
 
 
 @dp.message_handler(lambda m: m.text == 'Купить разбан', state='*')
@@ -2769,6 +3035,9 @@ async def money_user(message: types.Message):
     elif cash <= 1000:
         answer = [', ещё подкопить и на Канары...', ', ешь ананасы, рябчиков жуй!', ', пора ехать тратить на себя.']
         text += f'{fmt.hlink(*mention)}{random.choice(answer)}'
+    elif cash >= 10000:
+        answer = [', махинации с коинами принесли плоды', ', так и на второй галактический флот хватит', ', думаю, пора выключать читы.']
+        text += f'{fmt.hlink(*mention)}{random.choice(answer)}'
     else:
         answer = [', такое состояние никому нельзя показывать!',
                   ', Лос Анжелес ждет! Все на дабл зеро!',
@@ -2840,12 +3109,15 @@ async def prefix_sets(message: types.Message, state=FSMContext):
 
 @dp.message_handler(lambda m: m.text == 'Купить 𝐹𝑙𝑎𝑚𝑒 𝐶𝑜𝑖𝑛 💮')
 async def coins(message: types.Message):
-    owners = utils.all_owner()
-    text = ''
+    owners = [(2078984273, -1001629215553), (594297929, -1001781348153)]
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
     for owner in owners:
-        mention = await mention_text('Владелец', owner.owner_id)
-        text += f'{fmt.hlink(*mention)}\n'
-    await message.answer(f'Для покупки 𝐹𝑙𝑎𝑚𝑒 𝐶𝑜𝑖𝑛 💮 свяжитесь с\n{text}\n /start что бы вернутся', reply_markup=types.ReplyKeyboardRemove())
+        user = session.query(FlameNet).filter(FlameNet.user_id == owner[0], FlameNet.chat_id == owner[1]).one_or_none()
+        group = utils.get_group(owner[1])
+        mention = await mention_text(user.first_name, user.user_id)
+        button = types.InlineKeyboardButton(f'{mention[0]} - {group.title}', url=mention[1])
+        keyboard.add(button)
+    await message.answer(f'Для покупки 𝐹𝑙𝑎𝑚𝑒 𝐶𝑜𝑖𝑛 💮 обращаться по ссылкам ниже\n /start что бы вернутся', reply_markup=keyboard)
 
 
 @dp.message_handler(commands=['снять'])
@@ -2892,7 +3164,7 @@ async def prefix(message: types.Message):
             chat_id,
             user_id
         )
-        await message.answer(f'{fmt.hlink(*mention)}, Вам удален префикс!.\nПричина: {text[-1]}.')
+        await message.answer(f'{fmt.hlink(*mention)}, Вам удален префикс!.\nПричина: {" ".join(text[1:])}.')
         await info_message(
             'delete prefix',
             message.chat.title,
@@ -2913,6 +3185,8 @@ async def check_url(message):
         return
     chat_id = message.chat.id
     from_id = message.from_user.id
+    if chat_id not in [-1001629215553, -1001781348153]:
+        return
     for entity in message.entities:
         if entity.type in ['url', 'text_link']:
             if not any([
@@ -2984,15 +3258,7 @@ async def lottery_result(message):
                 mention = await mention_text(user_random.first_name, user_random.user_id)
                 item = random.choice(box)
                 text = fmt.text(fmt.hlink(*mention), f'к вам прибыл курьер и доставил вам посылку. Никто не знает что внутри.\nВы аккуратно вскрываете ее и вам достается - {item}\n')
-                items = user.items
-                if items == '0':
-                    items = f'{item}:1'
-                else:
-                    items = [x.split(':') for x in [item for item in items.split(',')]]
-                    items_to_dict = {x: int(y) for x, y in items}
-                    items_to_dict[item] = int(items_to_dict.get(item, 0)) + 1
-                    items = ','.join([f'{k}:{v}' for k, v in items_to_dict.items()])
-                user.items = items
+                user.items = utils.items(user, item)
             await message.answer(text)
 
 

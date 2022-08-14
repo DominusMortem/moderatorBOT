@@ -35,6 +35,37 @@ def wedding_date_now(date):
     return f'{day} д. {hour} ч. {minute} мин. {seconds} сек'
 
 
+def get_item_user(user, item):
+    items = [x.split(':') for x in [item for item in user.items.split(',') if user.items != '0']]
+    if not items:
+        i = None
+    items_to_dict = {x: int(y) for x, y in items}
+    for k in items_to_dict.keys():
+        if item.lower() in k.lower():
+            i = k
+            break
+        else:
+            i = None
+    return i
+
+
+def items(user, item, delete=0):
+    items = user.items
+    if items == '0':
+        items = f'{item}:1'
+    else:
+        items = [x.split(':') for x in [item for item in items.split(',')]]
+        items_to_dict = {x: int(y) for x, y in items}
+        if delete:
+            items_to_dict[item] = int(items_to_dict.get(item, 0)) - 1
+            if items_to_dict[item] == 0:
+                del items_to_dict[item]
+        else:
+            items_to_dict[item] = int(items_to_dict.get(item, 0)) + 1
+        items = ','.join([f'{k}:{v}' for k, v in items_to_dict.items()])
+    return items
+
+
 def roulette_exist(chat_id):
     return session.query(exists().where(Groups.group_id == chat_id, Groups.revo == 1)).scalar()
 
@@ -73,7 +104,7 @@ def serial_exists(chat_id):
 
 def lottery_exists(chat_id):
     """Проверка что пользователь совладелец"""
-    return session.query(exists().where(Groups.group_id == chat_id, Groups.lottery == 1)).scalar()
+    return not session.query(exists().where(Groups.group_id == chat_id, Groups.lottery == 0)).scalar()
 
 
 def get_user(chat_id, user_id):
@@ -152,13 +183,17 @@ def get_user_rp(user_id):
     return session.query(RPContext).filter(RPContext.user_id == user_id).all()
 
 
+def vip(user_id):
+    return session.query(VIP).filter(VIP.user_id == user_id).one_or_none()
+
+
 def get_vip(user_id):
     """Удаление RP команд при истечении ВИП"""
-    user = session.query(VIP).filter(VIP.user_id == user_id).one_or_none()
+    user = vip(user_id)
     if user:
         if datetime.datetime.now() >= datetime.datetime.strptime(user.until_date, '%Y-%m-%d %H:%M:%S'):
             session.delete(user)
-            get_user_rp(user_id=user_id).delete()
+            session.query(RPContext).filter(RPContext.user_id == user_id).delete()
             session.commit()
             return True
 
@@ -176,9 +211,13 @@ def check_vip(user_id):
 def get_all_admin(chat_id):
     """Получение списка всех администраторов бота"""
     owners = session.query(Main)
+    owners_first_name = []
+    for owner in owners:
+        user = session.query(FlameNet).filter(FlameNet.user_id == owner.owner_id).all()
+        owners_first_name.append(user[0])
     admins = session.query(FlameNet).filter(FlameNet.chat_id == chat_id, FlameNet.is_admin == 1).all()
     moders = session.query(FlameNet).filter(FlameNet.chat_id == chat_id, FlameNet.is_moder == 1).all()
-    return admins, moders, owners
+    return admins, moders, owners_first_name
 
 
 def exp(expirience, count_message):
