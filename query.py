@@ -17,6 +17,7 @@ class Main(Base):
 
     id = Column(Integer, primary_key=True)
     owner_id = Column(Integer)
+    first_name = Column(String)
 
 
 class RPContext(Base):
@@ -38,8 +39,8 @@ class VIP(Base):
     user_id = Column(Integer)
 
 
-class Killer(Base):
-    __tablename__ = 'killer'
+class Game(Base):
+    __tablename__ = 'game'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer)
@@ -61,9 +62,7 @@ class Constants(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, unique=True)
-    from_id = Column(Integer)
     chat_id = Column(String)
-    mention = Column(String)
     person_first_name = Column(String)
     person_id = Column(Integer)
     person_two_first_name = Column(String)
@@ -77,7 +76,7 @@ class Setting(Base):
     money_for_game = Column(Integer, nullable=False, default=0)
     id_group_log = Column(String, unique=True)
     exp_for_message = Column(Integer, nullable=False, default=0)
-    gif = Column(Integer, nullable=False, default=0)
+    hello = Column(Integer, nullable=False, default=0)
     
 
 class Groups(Base):
@@ -101,10 +100,11 @@ class Banned(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, unique=True)
     desc = Column(String)
+    admin_id = Column(Integer)
 
 
 class FlameNet(Base):
-    __tablename__ = 'flame_net'
+    __tablename__ = 'users'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer)
@@ -128,10 +128,8 @@ class FlameNet(Base):
     exp = Column(String, nullable=False, default='0/300')
     first_name = Column(String)
     prefix_off = Column(String)
-    message = Column(String)
     count = Column(Integer)
     is_active = Column(Integer, nullable=False, default=0)
-    message_id = Column(Integer)
     reputation = Column(Integer, nullable=False, default=0)
     karma = Column(Integer, nullable=False, default=0)
     items = Column(String, nullable=False, default='0')
